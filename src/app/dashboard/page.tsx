@@ -5,17 +5,17 @@ export default function Dashboard() {
     <main className="mx-auto w-full max-w-6xl px-4 py-8">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-sm font-semibold text-slate-950">Dashboard (Fase 1)</div>
-          <div className="text-sm text-slate-800">
+          <div className="text-sm font-semibold text-slate-50">Dashboard (Fase 1)</div>
+          <div className="text-sm text-slate-200">
             Status operacional: uploads, Guardian e distribuição.
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Link href="/" className="text-sm text-slate-700 hover:text-slate-950">
+          <Link href="/" className="text-sm text-slate-200 hover:text-white">
             Home
           </Link>
           <span className="text-slate-300">•</span>
-          <Link href="/studio" className="text-sm text-slate-700 hover:text-slate-950">
+          <Link href="/studio" className="text-sm text-slate-200 hover:text-white">
             Studio
           </Link>
         </div>
@@ -52,4 +52,3 @@ export default function Dashboard() {
     </main>
   );
 }
-

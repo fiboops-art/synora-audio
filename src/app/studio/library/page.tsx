@@ -69,15 +69,15 @@ export default function LibraryPage() {
     <main className="mx-auto w-full max-w-6xl px-4 py-8">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-sm font-semibold text-slate-950">Biblioteca</div>
-          <div className="text-sm text-slate-800">Catálogo local do MVP.</div>
+          <div className="text-sm font-semibold text-slate-50">Biblioteca</div>
+          <div className="text-sm text-slate-200">Catálogo local do MVP.</div>
         </div>
         <div className="flex items-center gap-2">
-          <Link href="/studio/upload" className="text-sm text-slate-700 hover:text-slate-950">
+          <Link href="/studio/upload" className="text-sm text-slate-200 hover:text-white">
             Enviar faixa
           </Link>
           <span className="text-slate-300">•</span>
-          <Link href="/dashboard" className="text-sm text-slate-700 hover:text-slate-950">
+          <Link href="/dashboard" className="text-sm text-slate-200 hover:text-white">
             Dashboard
           </Link>
         </div>

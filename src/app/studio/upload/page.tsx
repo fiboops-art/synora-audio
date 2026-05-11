@@ -75,10 +75,10 @@ export default function UploadPage() {
     <main className="mx-auto w-full max-w-6xl px-4 py-8">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-sm font-semibold text-slate-950">Enviar faixa (MVP)</div>
-          <div className="text-sm text-slate-800">Upload + metadata + Guardian (stub).</div>
+          <div className="text-sm font-semibold text-slate-50">Enviar faixa (MVP)</div>
+          <div className="text-sm text-slate-200">Upload + metadata + Guardian (stub).</div>
         </div>
-        <Link href="/studio" className="text-sm text-slate-700 hover:text-slate-950">
+        <Link href="/studio" className="text-sm text-slate-200 hover:text-white">
           Voltar
         </Link>
       </div>
