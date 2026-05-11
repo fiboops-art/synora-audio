@@ -11,6 +11,7 @@ export default function UploadPage() {
   const [mode, setMode] = useState<"upload" | "ai">("upload");
   const [guardianOut, setGuardianOut] = useState<any>(null);
   const [busy, setBusy] = useState(false);
+  const [savedTrackId, setSavedTrackId] = useState<string | null>(null);
 
   const canSubmit = useMemo(() => {
     if (mode === "upload") return !!file && !!title.trim() && !!artist.trim();
@@ -20,7 +21,30 @@ export default function UploadPage() {
   async function onValidate() {
     setBusy(true);
     setGuardianOut(null);
+    setSavedTrackId(null);
     try {
+      // 1) Persist minimal track row (MVP)
+      const createRes = await fetch("/api/tracks", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title,
+          artist,
+          meta: {
+            mode,
+            file_name: file?.name,
+            file_type: file?.type,
+            file_size: file?.size,
+          },
+        }),
+      });
+      const created = await createRes.json();
+      if (!createRes.ok) {
+        setGuardianOut(created);
+        return;
+      }
+      setSavedTrackId(created.track?.id ?? null);
+
       const correlation_id = `AUD-${Date.now()}`;
       const out = await validateWithGuardian({
         stage: "D",
@@ -36,7 +60,7 @@ export default function UploadPage() {
         request: {
           operation: "upload_precheck",
           scope: { fields: ["track.title", "track.artist", "track.file_hash"] },
-          subject: { trackId: "T-LOCAL" },
+          subject: { trackId: created.track?.id ?? "T-LOCAL" },
           retention: "30d",
           masking: true,
         },
@@ -144,6 +168,12 @@ export default function UploadPage() {
             Status esperado: APPROVED / APPROVED_WITH_ADJUSTMENTS / BLOCKED.
           </div>
 
+          {savedTrackId && (
+            <div className="mt-3 rounded-xl bg-white/70 p-3 text-xs ring-1 ring-slate-900/10">
+              Track salva: <span className="font-semibold text-slate-950">{savedTrackId}</span>
+            </div>
+          )}
+
           <pre className="mt-4 max-h-[420px] overflow-auto rounded-xl bg-white/70 p-3 text-xs ring-1 ring-slate-900/10">
             {guardianOut ? JSON.stringify(guardianOut, null, 2) : "(ainda não validado)"}
           </pre>
@@ -152,4 +182,3 @@ export default function UploadPage() {
     </main>
   );
 }
-

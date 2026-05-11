@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Track = {
   id: string;
@@ -12,19 +12,40 @@ type Track = {
   distributionStatus: "NOT_SENT" | "QUEUED" | "SENT";
 };
 
-const seed: Track[] = [
-  {
-    id: "T-1001",
-    title: "Midnight Circuit",
-    artist: "Synora Lab",
-    createdAt: new Date().toISOString(),
-    guardianStatus: "PENDING",
-    distributionStatus: "NOT_SENT",
-  },
-];
-
 export default function LibraryPage() {
-  const [tracks, setTracks] = useState<Track[]>(seed);
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch("/api/tracks", { cache: "no-store" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error ?? "Failed to load tracks");
+        const rows = (data.tracks ?? []) as any[];
+        const mapped: Track[] = rows.map((r) => ({
+          id: r.id,
+          title: r.title,
+          artist: r.artist,
+          createdAt: r.created_at,
+          guardianStatus: r.guardian_status,
+          distributionStatus: r.distribution_status,
+        }));
+        if (mounted) setTracks(mapped);
+      } catch (e: any) {
+        if (mounted) setError(e?.message ?? "Error");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const stats = useMemo(() => {
     const total = tracks.length;
@@ -85,7 +106,25 @@ export default function LibraryPage() {
           <div className="col-span-2 text-right">Ações</div>
         </div>
 
-        {tracks.map((t) => (
+        {loading && (
+          <div className="px-4 py-6 text-sm text-slate-800">Carregando…</div>
+        )}
+        {error && (
+          <div className="px-4 py-6 text-sm text-red-100">
+            Erro: {error}
+            <div className="mt-1 text-xs text-slate-200/80">
+              Dica: configure NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY na Vercel.
+            </div>
+          </div>
+        )}
+
+        {!loading && !error && tracks.length === 0 && (
+          <div className="px-4 py-6 text-sm text-slate-800">
+            Nenhuma faixa ainda. Envie a primeira em <Link className="underline" href="/studio/upload">/studio/upload</Link>.
+          </div>
+        )}
+
+        {!loading && !error && tracks.map((t) => (
           <div key={t.id} className="grid grid-cols-12 gap-2 px-4 py-3 text-sm">
             <div className="col-span-5">
               <div className="font-semibold text-slate-950">{t.title}</div>
@@ -115,4 +154,3 @@ export default function LibraryPage() {
     </main>
   );
 }
-
