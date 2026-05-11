@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabaseClient";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const supabase = getSupabase();
@@ -13,7 +16,13 @@ export async function GET() {
     }
     return NextResponse.json({ tracks: data ?? [] });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "Unknown error" }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: e?.message ?? "Unknown error",
+        cause: e?.cause ? String(e.cause) : undefined,
+      },
+      { status: 500 }
+    );
   }
 }
 
@@ -37,7 +46,12 @@ export async function POST(req: Request) {
     }
     return NextResponse.json({ track: data });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "Unknown error" }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: e?.message ?? "Unknown error",
+        cause: e?.cause ? String(e.cause) : undefined,
+      },
+      { status: 500 }
+    );
   }
 }
-
