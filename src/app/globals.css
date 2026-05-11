@@ -3,6 +3,9 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  --bg-overlay: linear-gradient(180deg, rgba(7, 24, 39, 0.55), rgba(7, 24, 39, 0.85));
+  --synora-audio-bg: url("/backgrounds/synora-audio-bg-desktop-v1.png");
 }
 
 @theme inline {
@@ -20,7 +23,26 @@
 }
 
 body {
-  background: var(--background);
+  background-image: var(--bg-overlay), var(--synora-audio-bg);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --synora-audio-bg: url("/backgrounds/synora-audio-bg-mobile-v2.png");
+  }
+  body {
+    background-attachment: scroll;
+  }
+}
+
+@media (min-width: 1800px), (min-aspect-ratio: 21/9) {
+  :root {
+    --synora-audio-bg: url("/backgrounds/synora-audio-bg-ultrawide-v1.png");
+  }
 }
