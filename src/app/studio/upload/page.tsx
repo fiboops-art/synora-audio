@@ -24,20 +24,59 @@ export default function UploadPage() {
     setSavedTrackId(null);
     try {
       if (mode === "upload" && file) {
-        // Real upload path (Storage + DB + Guardian) via server route
-        const fd = new FormData();
-        fd.set("title", title);
-        fd.set("artist", artist);
-        fd.set("file", file);
-
-        const res = await fetch("/api/tracks/upload", { method: "POST", body: fd });
-        const data = await res.json();
-        if (!res.ok) {
-          setGuardianOut(data);
+        // Large files: avoid Vercel request limits by uploading directly to Supabase via signed URL
+        const startRes = await fetch("/api/tracks/start-upload", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            title,
+            artist,
+            file_name: file.name,
+            file_type: file.type,
+            file_size: file.size,
+          }),
+        });
+        const start = await startRes.json();
+        if (!startRes.ok) {
+          setGuardianOut(start);
           return;
         }
-        setSavedTrackId(data.track?.id ?? null);
-        setGuardianOut(data.guardian ?? data);
+
+        setSavedTrackId(start.trackId ?? null);
+
+        const up = await fetch(start.signedUrl, {
+          method: "PUT",
+          headers: { "content-type": file.type || "application/octet-stream" },
+          body: file,
+        });
+        if (!up.ok) {
+          const t = await up.text().catch(() => "");
+          setGuardianOut({
+            error: "Upload direto ao Storage falhou",
+            status: up.status,
+            text: t.slice(0, 500),
+          });
+          return;
+        }
+
+        const finRes = await fetch("/api/tracks/finalize", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            trackId: start.trackId,
+            path: start.path,
+            file_type: file.type,
+            file_size: file.size,
+            title,
+            artist,
+          }),
+        });
+        const fin = await finRes.json();
+        if (!finRes.ok) {
+          setGuardianOut(fin);
+          return;
+        }
+        setGuardianOut(fin.guardian ?? fin);
         return;
       }
 
@@ -115,7 +154,7 @@ export default function UploadPage() {
                 className="mt-1 block w-full rounded-xl bg-white/70 p-2 text-sm text-slate-950 file:text-slate-950 ring-1 ring-slate-900/10"
               />
               <div className="mt-1 text-xs text-slate-600">
-                * Upload real: requer bucket <span className="font-semibold">tracks</span> no Supabase Storage + <span className="font-semibold">SUPABASE_SERVICE_ROLE_KEY</span> na Vercel.
+                * Upload real: usa URL assinada (não passa pelo limite da Vercel). Requer bucket <span className="font-semibold">tracks</span> no Supabase Storage + <span className="font-semibold">SUPABASE_SERVICE_ROLE_KEY</span> na Vercel.
               </div>
             </div>
           )}
