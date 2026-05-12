@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabaseClient";
+import { getSupabaseService } from "@/lib/supabaseServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -87,7 +88,7 @@ export async function POST(req: Request) {
 	    .insert({ title, artist, meta: body.meta ?? {} })
 	    .select("id,title,artist,created_at,guardian_status,distribution_status")
 	    .single();
-	  if (error) {
+    if (error) {
 	    let probe: any = null;
 	    try {
 	      probe = await probeSupabaseRaw();
@@ -104,9 +105,9 @@ export async function POST(req: Request) {
 	      },
 	      { status: 500 }
 	    );
-	  }
-	  return NextResponse.json({ track: data });
-	} catch (e: any) {
+    }
+    return NextResponse.json({ track: data });
+  } catch (e: any) {
     let probe: any = null;
     try {
       probe = await probeSupabaseRaw();
@@ -121,5 +122,40 @@ export async function POST(req: Request) {
       },
       { status: 500 }
     );
+  }
+}
+
+export async function PATCH(req: Request) {
+  // MVP: server-side update helper (guardian status, distribution status, etc.)
+  try {
+    const body = (await req.json()) as {
+      id?: string;
+      guardian_status?: string;
+      distribution_status?: string;
+      guardian_raw?: any;
+      file_path?: string;
+      file_mime?: string;
+      file_size?: number;
+    };
+    if (!body.id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+    const supabase = getSupabaseService();
+    const { data, error } = await supabase
+      .from("tracks")
+      .update({
+        guardian_status: body.guardian_status,
+        distribution_status: body.distribution_status,
+        guardian_raw: body.guardian_raw,
+        file_path: body.file_path,
+        file_mime: body.file_mime,
+        file_size: body.file_size,
+      })
+      .eq("id", body.id)
+      .select("id,title,artist,created_at,guardian_status,distribution_status,file_path,file_mime,file_size")
+      .single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ track: data });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? "Unknown error" }, { status: 500 });
   }
 }

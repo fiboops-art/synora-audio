@@ -23,29 +23,25 @@ export default function UploadPage() {
     setGuardianOut(null);
     setSavedTrackId(null);
     try {
-      // 1) Persist minimal track row (MVP)
-      const createRes = await fetch("/api/tracks", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          title,
-          artist,
-          meta: {
-            mode,
-            file_name: file?.name,
-            file_type: file?.type,
-            file_size: file?.size,
-          },
-        }),
-      });
-      const created = await createRes.json();
-      if (!createRes.ok) {
-        setGuardianOut(created);
+      if (mode === "upload" && file) {
+        // Real upload path (Storage + DB + Guardian) via server route
+        const fd = new FormData();
+        fd.set("title", title);
+        fd.set("artist", artist);
+        fd.set("file", file);
+
+        const res = await fetch("/api/tracks/upload", { method: "POST", body: fd });
+        const data = await res.json();
+        if (!res.ok) {
+          setGuardianOut(data);
+          return;
+        }
+        setSavedTrackId(data.track?.id ?? null);
+        setGuardianOut(data.guardian ?? data);
         return;
       }
-      setSavedTrackId(created.track?.id ?? null);
 
-      const correlation_id = `AUD-${Date.now()}`;
+      // Fallback (no file): only Guardian precheck
       const out = await validateWithGuardian({
         stage: "D",
         content: `Faixa: ${title} — Artista: ${artist}`,
@@ -54,13 +50,13 @@ export default function UploadPage() {
           purpose: "music_upload_compliance_precheck",
           source: "synora-audio",
           locale: "pt-BR",
-          correlation_id,
+          correlation_id: `AUD-${Date.now()}`,
           content_type: "application/json",
         },
         request: {
           operation: "upload_precheck",
-          scope: { fields: ["track.title", "track.artist", "track.file_hash"] },
-          subject: { trackId: created.track?.id ?? "T-LOCAL" },
+          scope: { fields: ["track.title", "track.artist"] },
+          subject: { trackId: "T-LOCAL" },
           retention: "30d",
           masking: true,
         },
@@ -119,7 +115,7 @@ export default function UploadPage() {
                 className="mt-1 block w-full rounded-xl bg-white/70 p-2 text-sm text-slate-950 file:text-slate-950 ring-1 ring-slate-900/10"
               />
               <div className="mt-1 text-xs text-slate-600">
-                * Neste MVP não fazemos upload real ainda.
+                * Upload real: requer bucket <span className="font-semibold">tracks</span> no Supabase Storage + <span className="font-semibold">SUPABASE_SERVICE_ROLE_KEY</span> na Vercel.
               </div>
             </div>
           )}

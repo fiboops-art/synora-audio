@@ -9,6 +9,9 @@ create table if not exists public.tracks (
   created_at timestamptz not null default now(),
   guardian_status text not null default 'PENDING',
   distribution_status text not null default 'NOT_SENT',
+  file_path text,
+  file_mime text,
+  file_size bigint,
   guardian_raw jsonb,
   meta jsonb
 );
@@ -34,4 +37,3 @@ for update
 to anon
 using (true)
 with check (true);
-
