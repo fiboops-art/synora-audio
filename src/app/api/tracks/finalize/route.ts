@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSupabaseService } from "@/lib/supabaseServer";
+import { getSupabaseAuthed } from "@/lib/supabaseAuthedServer";
 import { validateWithGuardian } from "@/lib/guardianClient";
 
 export const runtime = "nodejs";
@@ -25,9 +25,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing trackId/path" }, { status: 400 });
     }
 
-    const supabase = getSupabaseService();
+    const supabase = getSupabaseAuthed(token);
 
-    const { data: userData, error: userErr } = await supabase.auth.getUser(token);
+    const { data: userData, error: userErr } = await supabase.auth.getUser();
     if (userErr || !userData.user) {
       return NextResponse.json({ error: "Invalid session" }, { status: 401 });
     }
