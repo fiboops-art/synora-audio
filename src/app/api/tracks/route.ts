@@ -32,14 +32,29 @@ export async function GET() {
   try {
     const supabase = getSupabase();
     const { data, error } = await supabase
-      .from("tracks")
-      .select("id,title,artist,created_at,guardian_status,distribution_status")
-      .order("created_at", { ascending: false });
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-    return NextResponse.json({ tracks: data ?? [] });
-  } catch (e: any) {
+	    .from("tracks")
+	    .select("id,title,artist,created_at,guardian_status,distribution_status")
+	    .order("created_at", { ascending: false });
+	  if (error) {
+	    let probe: any = null;
+	    try {
+	      probe = await probeSupabaseRaw();
+	    } catch (p: any) {
+	      probe = { error: p?.message ?? String(p) };
+	    }
+	    return NextResponse.json(
+	      {
+	        error: (error as any).message ?? String(error),
+	        details: (error as any).details,
+	        hint: (error as any).hint,
+	        code: (error as any).code,
+	        probe,
+	      },
+	      { status: 500 }
+	    );
+	  }
+	  return NextResponse.json({ tracks: data ?? [] });
+	} catch (e: any) {
     let probe: any = null;
     try {
       probe = await probeSupabaseRaw();
@@ -69,14 +84,29 @@ export async function POST(req: Request) {
     const supabase = getSupabase();
     const { data, error } = await supabase
       .from("tracks")
-      .insert({ title, artist, meta: body.meta ?? {} })
-      .select("id,title,artist,created_at,guardian_status,distribution_status")
-      .single();
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-    return NextResponse.json({ track: data });
-  } catch (e: any) {
+	    .insert({ title, artist, meta: body.meta ?? {} })
+	    .select("id,title,artist,created_at,guardian_status,distribution_status")
+	    .single();
+	  if (error) {
+	    let probe: any = null;
+	    try {
+	      probe = await probeSupabaseRaw();
+	    } catch (p: any) {
+	      probe = { error: p?.message ?? String(p) };
+	    }
+	    return NextResponse.json(
+	      {
+	        error: (error as any).message ?? String(error),
+	        details: (error as any).details,
+	        hint: (error as any).hint,
+	        code: (error as any).code,
+	        probe,
+	      },
+	      { status: 500 }
+	    );
+	  }
+	  return NextResponse.json({ track: data });
+	} catch (e: any) {
     let probe: any = null;
     try {
       probe = await probeSupabaseRaw();
