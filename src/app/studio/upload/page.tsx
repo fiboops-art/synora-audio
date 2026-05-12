@@ -116,7 +116,7 @@ export default function UploadPage() {
                 type="file"
                 accept="audio/*"
                 onChange={(e) => setFile(e.target.files?.[0] || null)}
-                className="mt-1 block w-full rounded-xl bg-white/70 p-2 text-sm ring-1 ring-slate-900/10"
+                className="mt-1 block w-full rounded-xl bg-white/70 p-2 text-sm text-slate-950 file:text-slate-950 ring-1 ring-slate-900/10"
               />
               <div className="mt-1 text-xs text-slate-600">
                 * Neste MVP não fazemos upload real ainda.
@@ -131,7 +131,7 @@ export default function UploadPage() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Ex.: Midnight Circuit"
-                className="mt-1 block w-full rounded-xl bg-white/70 p-2 text-sm ring-1 ring-slate-900/10"
+                className="mt-1 block w-full rounded-xl bg-white/70 p-2 text-sm text-slate-950 placeholder:text-slate-500 ring-1 ring-slate-900/10"
               />
             </div>
             <div>
@@ -140,7 +140,7 @@ export default function UploadPage() {
                 value={artist}
                 onChange={(e) => setArtist(e.target.value)}
                 placeholder="Ex.: Claudio / Synora Lab"
-                className="mt-1 block w-full rounded-xl bg-white/70 p-2 text-sm ring-1 ring-slate-900/10"
+                className="mt-1 block w-full rounded-xl bg-white/70 p-2 text-sm text-slate-950 placeholder:text-slate-500 ring-1 ring-slate-900/10"
               />
             </div>
           </div>
