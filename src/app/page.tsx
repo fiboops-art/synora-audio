@@ -8,10 +8,10 @@ function Header() {
           <img src="/synora-logo.svg" alt="Synora" className="h-8 w-8" />
         </div>
         <div>
-          <div className="text-sm font-semibold leading-tight text-slate-950">
+          <div className="text-sm font-semibold leading-tight text-slate-50">
             Synora Audio
           </div>
-          <div className="text-sm text-slate-800">
+          <div className="text-sm text-slate-200">
             Infraestrutura para creators de música IA
           </div>
         </div>
@@ -20,13 +20,13 @@ function Header() {
       <nav className="flex items-center gap-2">
         <Link
           href="/studio"
-          className="rounded-xl bg-white/60 px-3 py-2 text-xs text-slate-900 ring-1 ring-slate-900/10 backdrop-blur transition hover:bg-white/80"
+          className="rounded-xl bg-white/10 px-3 py-2 text-xs text-white ring-1 ring-white/20 backdrop-blur transition hover:bg-white/15"
         >
           Studio
         </Link>
         <Link
           href="/dashboard"
-          className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-sm ring-1 ring-slate-900/20 transition hover:bg-slate-950"
+          className="rounded-xl bg-white/15 px-3 py-2 text-xs font-semibold text-white shadow-sm ring-1 ring-white/20 backdrop-blur transition hover:bg-white/20"
         >
           Dashboard
         </Link>
@@ -108,4 +108,3 @@ export default function Home() {
     </main>
   );
 }
-
