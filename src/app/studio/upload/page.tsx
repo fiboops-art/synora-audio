@@ -170,7 +170,7 @@ export default function UploadPage() {
             </div>
           )}
 
-          <pre className="mt-4 max-h-[420px] overflow-auto rounded-xl bg-white/70 p-3 text-xs ring-1 ring-slate-900/10">
+          <pre className="mt-4 max-h-[420px] overflow-auto rounded-xl bg-slate-950/70 p-3 text-xs text-slate-50 ring-1 ring-white/10 backdrop-blur">
             {guardianOut ? JSON.stringify(guardianOut, null, 2) : "(ainda não validado)"}
           </pre>
         </div>
