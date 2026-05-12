@@ -131,12 +131,12 @@ export default function LibraryPage() {
               <div className="text-xs text-slate-700">{t.artist} • {t.id}</div>
             </div>
             <div className="col-span-3">
-              <span className="rounded-full bg-white/80 px-2 py-1 text-xs ring-1 ring-slate-900/10">
+              <span className="rounded-full bg-white/80 px-2 py-1 text-xs text-slate-950 ring-1 ring-slate-900/10">
                 {t.guardianStatus}
               </span>
             </div>
             <div className="col-span-2">
-              <span className="rounded-full bg-white/80 px-2 py-1 text-xs ring-1 ring-slate-900/10">
+              <span className="rounded-full bg-white/80 px-2 py-1 text-xs text-slate-950 ring-1 ring-slate-900/10">
                 {t.distributionStatus}
               </span>
             </div>
