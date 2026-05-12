@@ -1,10 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { validateWithGuardian } from "@/lib/guardianClient";
+import { getAccessToken } from "@/lib/auth";
+import { useRouter } from "next/navigation";
+import { getSupabase } from "@/lib/supabaseClient";
 
 export default function UploadPage() {
+  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
@@ -12,6 +16,14 @@ export default function UploadPage() {
   const [guardianOut, setGuardianOut] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const [savedTrackId, setSavedTrackId] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const supabase = getSupabase();
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) router.replace("/login");
+    })();
+  }, [router]);
 
   const canSubmit = useMemo(() => {
     if (mode === "upload") return !!file && !!title.trim() && !!artist.trim();
@@ -25,9 +37,14 @@ export default function UploadPage() {
     try {
       if (mode === "upload" && file) {
         // Large files: avoid Vercel request limits by uploading directly to Supabase via signed URL
+        const token = await getAccessToken();
+        if (!token) {
+          setGuardianOut({ error: "Você precisa estar logado para fazer upload" });
+          return;
+        }
         const startRes = await fetch("/api/tracks/start-upload", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
           body: JSON.stringify({
             title,
             artist,
@@ -61,7 +78,7 @@ export default function UploadPage() {
 
         const finRes = await fetch("/api/tracks/finalize", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
           body: JSON.stringify({
             trackId: start.trackId,
             path: start.path,

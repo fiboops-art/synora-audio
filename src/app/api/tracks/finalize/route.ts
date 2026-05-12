@@ -7,6 +7,12 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
+    const auth = req.headers.get("authorization") || "";
+    const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+    if (!token) {
+      return NextResponse.json({ error: "Missing Authorization" }, { status: 401 });
+    }
+
     const body = (await req.json()) as {
       trackId?: string;
       path?: string;
@@ -21,6 +27,12 @@ export async function POST(req: Request) {
 
     const supabase = getSupabaseService();
 
+    const { data: userData, error: userErr } = await supabase.auth.getUser(token);
+    if (userErr || !userData.user) {
+      return NextResponse.json({ error: "Invalid session" }, { status: 401 });
+    }
+    const uid = userData.user.id;
+
     // fetch basic track info (fallback if title/artist not sent)
     let title = (body.title ?? "").trim();
     let artist = (body.artist ?? "").trim();
@@ -29,6 +41,7 @@ export async function POST(req: Request) {
         .from("tracks")
         .select("title,artist")
         .eq("id", body.trackId)
+        .eq("user_id", uid)
         .single();
       if (getErr) return NextResponse.json({ error: getErr.message }, { status: 500 });
       title = row?.title ?? title;
@@ -69,6 +82,7 @@ export async function POST(req: Request) {
         file_size: body.file_size,
       })
       .eq("id", body.trackId)
+      .eq("user_id", uid)
       .select(
         "id,title,artist,created_at,guardian_status,distribution_status,file_path,file_mime,file_size"
       )
@@ -80,4 +94,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: e?.message ?? "Unknown error" }, { status: 500 });
   }
 }
-

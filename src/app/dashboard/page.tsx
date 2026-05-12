@@ -1,6 +1,21 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { getSupabase } from "@/lib/supabaseClient";
 
 export default function Dashboard() {
+  const router = useRouter();
+
+  useEffect(() => {
+    (async () => {
+      const supabase = getSupabase();
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) router.replace("/login");
+    })();
+  }, [router]);
+
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-8">
       <div className="flex items-center justify-between">

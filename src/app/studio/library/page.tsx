@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { getSupabase } from "@/lib/supabaseClient";
+import { getAccessToken } from "@/lib/auth";
 
 type Track = {
   id: string;
@@ -16,14 +19,26 @@ export default function LibraryPage() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     let mounted = true;
     (async () => {
+      const supabase = getSupabase();
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess.session) {
+        router.replace("/login");
+        return;
+      }
+
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch("/api/tracks", { cache: "no-store" });
+        const token = await getAccessToken();
+        const res = await fetch("/api/tracks", {
+          cache: "no-store",
+          headers: token ? { authorization: `Bearer ${token}` } : {},
+        });
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error ?? "Failed to load tracks");
         const rows = (data.tracks ?? []) as any[];
@@ -45,7 +60,7 @@ export default function LibraryPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [router]);
 
   const stats = useMemo(() => {
     const total = tracks.length;
