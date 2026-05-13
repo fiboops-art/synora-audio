@@ -92,9 +92,9 @@ export async function POST(req: Request) {
     // guardian validate
     const correlation_id = `AUD-${Date.now()}`;
     const guardianInput = {
-      // Stage D in our Guardian currently flags this as "mass export". For this MVP upload flow,
-      // Stage B is the appropriate pre-send validation.
-      stage: "B",
+      // Synora-Audio is not a debt/proposal flow.
+      // Use Stage A (onboarding/LGPD validation) to avoid proposal-specific rules.
+      stage: "A",
       content: `Faixa: ${title} — Artista: ${artist}`,
       metadata: {
         tenant_id: "synora-audio-demo",
