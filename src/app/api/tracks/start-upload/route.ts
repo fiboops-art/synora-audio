@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSupabaseAuthed } from "@/lib/supabaseAuthedServer";
+import { getSupabaseService } from "@/lib/supabaseServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing title/artist" }, { status: 400 });
     }
 
-    const supabase = getSupabaseAuthed(token);
+    const supabase = getSupabaseService();
 
     const { data: userData, error: userErr } = await supabase.auth.getUser(token);
     if (userErr || !userData.user) {
