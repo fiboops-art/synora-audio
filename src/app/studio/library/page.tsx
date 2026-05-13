@@ -21,6 +21,54 @@ export default function LibraryPage() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
+  async function refreshTracks() {
+    setLoading(true);
+    setError(null);
+    try {
+      const token = await getAccessToken();
+      const res = await fetch("/api/tracks", {
+        cache: "no-store",
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "Failed to load tracks");
+      const rows = (data.tracks ?? []) as any[];
+      const mapped: Track[] = rows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        artist: r.artist,
+        createdAt: r.created_at,
+        guardianStatus: r.guardian_status,
+        distributionStatus: r.distribution_status,
+      }));
+      setTracks(mapped);
+    } catch (e: any) {
+      setError(e?.message ?? "Error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function trashTrack(id: string) {
+    const ok = window.confirm("Excluir esta faixa da sua biblioteca? (Isso não apaga o arquivo do Storage ainda)");
+    if (!ok) return;
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error("Sessão expirada. Faça login novamente.");
+      const res = await fetch("/api/tracks", {
+        method: "PATCH",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id, deleted_at: new Date().toISOString() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "Falha ao excluir");
+      // Optimistic: remove from UI
+      setTracks((cur) => cur.filter((t) => t.id !== id));
+    } catch (e: any) {
+      alert(e?.message ?? "Erro");
+    }
+  }
+
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -31,31 +79,7 @@ export default function LibraryPage() {
         return;
       }
 
-      setLoading(true);
-      setError(null);
-      try {
-        const token = await getAccessToken();
-        const res = await fetch("/api/tracks", {
-          cache: "no-store",
-          headers: token ? { authorization: `Bearer ${token}` } : {},
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error ?? "Failed to load tracks");
-        const rows = (data.tracks ?? []) as any[];
-        const mapped: Track[] = rows.map((r) => ({
-          id: r.id,
-          title: r.title,
-          artist: r.artist,
-          createdAt: r.created_at,
-          guardianStatus: r.guardian_status,
-          distributionStatus: r.distribution_status,
-        }));
-        if (mounted) setTracks(mapped);
-      } catch (e: any) {
-        if (mounted) setError(e?.message ?? "Error");
-      } finally {
-        if (mounted) setLoading(false);
-      }
+      if (mounted) await refreshTracks();
     })();
     return () => {
       mounted = false;
@@ -156,12 +180,21 @@ export default function LibraryPage() {
               </span>
             </div>
             <div className="col-span-2 text-right">
-              <button
-                onClick={() => markDistribution(t.id)}
-                className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-sm ring-1 ring-slate-900/20 hover:bg-slate-950"
-              >
-                Distribuir (stub)
-              </button>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  onClick={() => trashTrack(t.id)}
+                  className="rounded-xl bg-white/80 px-3 py-2 text-xs font-semibold text-slate-950 ring-1 ring-slate-900/10 hover:bg-white"
+                  title="Excluir"
+                >
+                  🗑️
+                </button>
+                <button
+                  onClick={() => markDistribution(t.id)}
+                  className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-sm ring-1 ring-slate-900/20 hover:bg-slate-950"
+                >
+                  Distribuir (stub)
+                </button>
+              </div>
             </div>
           </div>
         ))}

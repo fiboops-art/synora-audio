@@ -47,6 +47,7 @@ export async function GET(req: Request) {
       .from("tracks")
       .select("id,title,artist,created_at,guardian_status,distribution_status")
       .eq("user_id", uid)
+      .is("deleted_at", null)
       .order("created_at", { ascending: false });
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -79,6 +80,12 @@ export async function POST() {
 export async function PATCH(req: Request) {
   // MVP: server-side update helper (guardian status, distribution status, etc.)
   try {
+    const auth = req.headers.get("authorization") || "";
+    const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+    if (!token) {
+      return NextResponse.json({ error: "Missing Authorization" }, { status: 401 });
+    }
+
     const body = (await req.json()) as {
       id?: string;
       guardian_status?: string;
@@ -87,11 +94,18 @@ export async function PATCH(req: Request) {
       file_path?: string;
       file_mime?: string;
       file_size?: number;
+      deleted_at?: string | null;
     };
     if (!body.id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
-    const supabase = getSupabaseService();
-    const { data, error } = await supabase
+    const service = getSupabaseService();
+    const { data: userData, error: userErr } = await service.auth.getUser(token);
+    if (userErr || !userData.user) {
+      return NextResponse.json({ error: "Invalid session" }, { status: 401 });
+    }
+    const uid = userData.user.id;
+
+    const { data, error } = await service
       .from("tracks")
       .update({
         guardian_status: body.guardian_status,
@@ -100,8 +114,10 @@ export async function PATCH(req: Request) {
         file_path: body.file_path,
         file_mime: body.file_mime,
         file_size: body.file_size,
+        deleted_at: body.deleted_at ?? undefined,
       })
       .eq("id", body.id)
+      .eq("user_id", uid)
       .select("id,title,artist,created_at,guardian_status,distribution_status,file_path,file_mime,file_size")
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
