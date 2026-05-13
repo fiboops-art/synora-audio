@@ -4,6 +4,7 @@ create extension if not exists pgcrypto;
 
 create table if not exists public.tracks (
   id uuid primary key default gen_random_uuid(),
+  user_id uuid not null,
   title text not null,
   artist text not null,
   created_at timestamptz not null default now(),
@@ -12,28 +13,45 @@ create table if not exists public.tracks (
   file_path text,
   file_mime text,
   file_size bigint,
+  deleted_at timestamptz,
+  deleted_by uuid,
   guardian_raw jsonb,
   meta jsonb
 );
 
+-- Optional FK (safe to run even if auth schema isn't present in local tooling)
+do $$ begin
+  alter table public.tracks
+    add constraint tracks_user_id_fkey
+    foreign key (user_id) references auth.users(id)
+    on delete cascade;
+exception when undefined_table then
+  -- Local tooling without auth schema: ignore.
+  null;
+end $$;
+
 alter table public.tracks enable row level security;
 
--- MVP: open read/write for anon (remove later when auth is added)
-drop policy if exists "tracks_anon_read" on public.tracks;
-create policy "tracks_anon_read" on public.tracks
-for select
-to anon
-using (true);
+-- Indexes
+create index if not exists tracks_user_created_at_idx on public.tracks (user_id, created_at desc);
+create index if not exists tracks_user_deleted_at_idx on public.tracks (user_id, deleted_at);
 
-drop policy if exists "tracks_anon_write" on public.tracks;
-create policy "tracks_anon_write" on public.tracks
-for insert
-to anon
-with check (true);
+-- RLS policies (user-scoped)
+drop policy if exists "tracks_select_own" on public.tracks;
+create policy "tracks_select_own"
+  on public.tracks for select
+  to authenticated
+  using (auth.uid() = user_id and deleted_at is null);
 
-drop policy if exists "tracks_anon_update" on public.tracks;
-create policy "tracks_anon_update" on public.tracks
-for update
-to anon
-using (true)
-with check (true);
+drop policy if exists "tracks_insert_own" on public.tracks;
+create policy "tracks_insert_own"
+  on public.tracks for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+drop policy if exists "tracks_update_own" on public.tracks;
+create policy "tracks_update_own"
+  on public.tracks for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
