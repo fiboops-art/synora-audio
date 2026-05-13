@@ -18,8 +18,8 @@ export async function validateWithGuardian(input: {
   request?: any;
 }): Promise<GuardianDecision> {
   // MVP: keep guardian optional. Fail-closed behavior should be enforced server-side in production.
-  const url = process.env.NEXT_PUBLIC_GUARDIAN_URL;
-  if (!url) {
+  const rawUrl = process.env.NEXT_PUBLIC_GUARDIAN_URL;
+  if (!rawUrl) {
     return {
       status: "APPROVED_WITH_ADJUSTMENTS",
       risk_score: 30,
@@ -28,8 +28,15 @@ export async function validateWithGuardian(input: {
     };
   }
 
+  // Accept either a full validate endpoint URL or a base URL.
+  // If user provided a base (e.g. https://synora-guardian.vercel.app), append the expected path.
+  let url = rawUrl.trim();
+  if (!/\/middleware\/guardian\/validate$/.test(url) && !/\/guardian\/validate$/.test(url)) {
+    url = url.replace(/\/+$/, "") + "/middleware/guardian/validate";
+  }
+
   const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), 7000);
+  const t = setTimeout(() => controller.abort(), 12000);
   try {
     const res = await fetch(url, {
       method: "POST",
