@@ -16,6 +16,22 @@ type Track = {
   deletedAt?: string | null;
 };
 
+function fmtDeletedAgo(iso?: string | null): string {
+  if (!iso) return "";
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return "";
+  const diffMs = Date.now() - t;
+  if (diffMs < 0) return "agora";
+  const sec = Math.floor(diffMs / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}min`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h`;
+  const day = Math.floor(hr / 24);
+  return `${day}d`;
+}
+
 export default function LibraryPage() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
@@ -99,6 +115,32 @@ export default function LibraryPage() {
       if (!res.ok) throw new Error(data?.error ?? "Falha ao restaurar");
 
       // Optimistic: remove from trash view
+      setTracks((cur) => cur.filter((t) => t.id !== id));
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === "object" && "message" in e && typeof (e as { message?: unknown }).message === "string"
+          ? (e as { message: string }).message
+          : "Erro";
+      alert(msg);
+    }
+  }
+
+  async function hardDeleteTrack(id: string) {
+    const ok = window.confirm(
+      "Excluir definitivamente? Isso remove do banco e tenta apagar o arquivo do Storage. (Ação irreversível)"
+    );
+    if (!ok) return;
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error("Sessão expirada. Faça login novamente.");
+      const res = await fetch("/api/tracks", {
+        method: "DELETE",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "Falha ao excluir definitivamente");
+
       setTracks((cur) => cur.filter((t) => t.id !== id));
     } catch (e: unknown) {
       const msg =
@@ -239,7 +281,12 @@ export default function LibraryPage() {
           <div key={t.id} className="grid grid-cols-12 gap-2 px-4 py-3 text-sm">
             <div className="col-span-5">
               <div className="font-semibold text-slate-950">{t.title}</div>
-              <div className="text-xs text-slate-700">{t.artist} • {t.id}</div>
+              <div className="text-xs text-slate-700">
+                {t.artist} • {t.id}
+                {view === "trash" && t.deletedAt ? (
+                  <span className="text-slate-600"> • apagada há {fmtDeletedAgo(t.deletedAt)}</span>
+                ) : null}
+              </div>
             </div>
             <div className="col-span-3">
               <span className="rounded-full bg-white/80 px-2 py-1 text-xs text-slate-950 ring-1 ring-slate-900/10">
@@ -254,13 +301,22 @@ export default function LibraryPage() {
             <div className="col-span-2 text-right">
               <div className="flex items-center justify-end gap-2">
                 {view === "trash" ? (
-                  <button
-                    onClick={() => restoreTrack(t.id)}
-                    className="rounded-xl bg-emerald-700 px-3 py-2 text-xs font-semibold text-white shadow-sm ring-1 ring-emerald-900/20 hover:bg-emerald-800"
-                    title="Restaurar"
-                  >
-                    Restaurar
-                  </button>
+                  <>
+                    <button
+                      onClick={() => restoreTrack(t.id)}
+                      className="rounded-xl bg-emerald-700 px-3 py-2 text-xs font-semibold text-white shadow-sm ring-1 ring-emerald-900/20 hover:bg-emerald-800"
+                      title="Restaurar"
+                    >
+                      Restaurar
+                    </button>
+                    <button
+                      onClick={() => hardDeleteTrack(t.id)}
+                      className="rounded-xl bg-rose-700 px-3 py-2 text-xs font-semibold text-white shadow-sm ring-1 ring-rose-900/20 hover:bg-rose-800"
+                      title="Excluir definitivamente"
+                    >
+                      Excluir
+                    </button>
+                  </>
                 ) : (
                   <button
                     onClick={() => trashTrack(t.id)}

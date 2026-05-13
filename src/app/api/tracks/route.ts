@@ -150,3 +150,63 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: errMsg(e) }, { status: 500 });
   }
 }
+
+export async function DELETE(req: Request) {
+  // Hard delete: remove file from Storage + delete DB row (only allowed for already-trashed items)
+  try {
+    const auth = req.headers.get("authorization") || "";
+    const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+    if (!token) {
+      return NextResponse.json({ error: "Missing Authorization" }, { status: 401 });
+    }
+
+    const body = (await req.json()) as { id?: string };
+    if (!body.id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+    const service = getSupabaseService();
+    const { data: userData, error: userErr } = await service.auth.getUser(token);
+    if (userErr || !userData.user) {
+      return NextResponse.json({ error: "Invalid session" }, { status: 401 });
+    }
+    const uid = userData.user.id;
+
+    // Load track to get storage path and ensure it is already soft-deleted
+    const { data: track, error: getErr } = await service
+      .from("tracks")
+      .select("id,user_id,file_path,deleted_at")
+      .eq("id", body.id)
+      .eq("user_id", uid)
+      .single();
+    if (getErr || !track) return NextResponse.json({ error: getErr?.message ?? "Not found" }, { status: 404 });
+
+    if (!track.deleted_at) {
+      return NextResponse.json(
+        { error: "Hard delete requires item to be in trash first" },
+        { status: 400 }
+      );
+    }
+
+    // Best-effort remove from Storage
+    const path = (track.file_path ?? "").trim();
+    if (path) {
+      const { error: rmErr } = await service.storage.from("tracks").remove([path]);
+      if (rmErr) {
+        return NextResponse.json(
+          { error: `Storage remove failed: ${rmErr.message}` },
+          { status: 500 }
+        );
+      }
+    }
+
+    const { error: delErr } = await service
+      .from("tracks")
+      .delete()
+      .eq("id", body.id)
+      .eq("user_id", uid);
+    if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+
+    return NextResponse.json({ ok: true });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: errMsg(e) }, { status: 500 });
+  }
+}
