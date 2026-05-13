@@ -91,7 +91,7 @@ export async function POST(req: Request) {
 
     // guardian validate
     const correlation_id = `AUD-${Date.now()}`;
-    const guardian = await validateWithGuardian({
+    const guardianInput = {
       stage: "D",
       content: `Faixa: ${title} — Artista: ${artist}`,
       metadata: {
@@ -117,7 +117,18 @@ export async function POST(req: Request) {
         retention: "30d",
         masking: true,
       },
-    });
+    } as const;
+
+    const guardian = await validateWithGuardian(guardianInput);
+
+    // Attach a small debug echo so the UI can confirm what was sent (without leaking secrets).
+    (guardian as any)._diag = {
+      sent: {
+        stage: guardianInput.stage,
+        correlation_id,
+        request: guardianInput.request,
+      },
+    };
 
     const guardian_status = guardian.status;
 
