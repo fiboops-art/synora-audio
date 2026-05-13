@@ -202,16 +202,16 @@ export default function UploadPage() {
         </Link>
       </div>
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl bg-white/70 p-6 ring-1 ring-slate-900/10 backdrop-blur">
-          <div className="text-xs font-semibold text-slate-950">Origem</div>
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <div className="syn-card p-7">
+          <div className="text-xs font-semibold text-slate-100">Origem</div>
           <div className="mt-2 flex gap-2">
             <button
               onClick={() => setMode("upload")}
               className={`rounded-xl px-3 py-2 text-xs ring-1 transition ${
                 mode === "upload"
-                  ? "bg-white/85 text-slate-950 ring-slate-900/10"
-                  : "bg-white/60 text-slate-800 ring-slate-900/10 hover:bg-white/75"
+                  ? "bg-white/10 text-white ring-white/15"
+                  : "bg-white/5 text-slate-200 ring-white/10 hover:bg-white/10"
               }`}
             >
               Upload (MP3/WAV)
@@ -220,8 +220,8 @@ export default function UploadPage() {
               onClick={() => setMode("ai")}
               className={`rounded-xl px-3 py-2 text-xs ring-1 transition ${
                 mode === "ai"
-                  ? "bg-white/85 text-slate-950 ring-slate-900/10"
-                  : "bg-white/60 text-slate-800 ring-slate-900/10 hover:bg-white/75"
+                  ? "bg-white/10 text-white ring-white/15"
+                  : "bg-white/5 text-slate-200 ring-white/10 hover:bg-white/10"
               }`}
             >
               Gerar com IA (stub)
@@ -230,7 +230,7 @@ export default function UploadPage() {
 
           {mode === "upload" && (
             <div className="mt-4">
-              <label className="text-xs font-semibold text-slate-700">Arquivo</label>
+              <label className="text-xs font-semibold text-slate-200">Arquivo</label>
               <input
                 type="file"
                 accept="audio/*"
@@ -239,17 +239,17 @@ export default function UploadPage() {
                   setGuardianOut(null);
                   resetUploadState();
                 }}
-                className="mt-1 block w-full rounded-xl bg-white/70 p-2 text-sm text-slate-950 file:text-slate-950 ring-1 ring-slate-900/10"
+                className="mt-1 block w-full rounded-xl border border-white/10 bg-white/5 p-2 text-sm text-slate-50 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white ring-0"
               />
-              <div className="mt-1 text-xs text-slate-600">
+              <div className="mt-1 text-xs text-slate-300/80">
                 * Upload real: usa URL assinada (não passa pelo limite da Vercel). Requer bucket <span className="font-semibold">tracks</span> no Supabase Storage + <span className="font-semibold">SUPABASE_SERVICE_ROLE_KEY</span> na Vercel.
               </div>
 
               {file && (
-                <div className="mt-3 rounded-xl bg-white/70 p-3 text-xs ring-1 ring-slate-900/10">
+                <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-3 text-xs">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="text-slate-900">
-                      <span className="font-semibold">Arquivo:</span> {file.name}
+                    <div className="text-slate-100">
+                      <span className="font-semibold">Arquivo:</span> <span className="text-slate-200">{file.name}</span>
                     </div>
                     <div className={`font-semibold ${uploadOk ? "text-emerald-700" : "text-slate-700"}`}>
                       {uploadOk ? "Pronto ✅" : uploadPct !== null ? `Enviando… ${uploadPct}%` : "Aguardando upload"}
@@ -257,9 +257,9 @@ export default function UploadPage() {
                   </div>
 
                   {uploadPct !== null && (
-                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200 ring-1 ring-slate-900/10">
+                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10 ring-1 ring-white/10">
                       <div
-                        className={`h-full ${uploadOk ? "bg-emerald-500" : "bg-slate-900"}`}
+                        className={`h-full ${uploadOk ? "bg-emerald-500" : "bg-cyan-300/70"}`}
                         style={{ width: `${uploadPct}%` }}
                       />
                     </div>
@@ -271,21 +271,21 @@ export default function UploadPage() {
 
           <div className="mt-4 grid gap-3">
             <div>
-              <label className="text-xs font-semibold text-slate-700">Título</label>
+              <label className="text-xs font-semibold text-slate-200">Título</label>
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Ex.: Midnight Circuit"
-                className="mt-1 block w-full rounded-xl bg-white/70 p-2 text-sm text-slate-950 placeholder:text-slate-500 ring-1 ring-slate-900/10"
+                className="syn-input"
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-700">Artista</label>
+              <label className="text-xs font-semibold text-slate-200">Artista</label>
               <input
                 value={artist}
                 onChange={(e) => setArtist(e.target.value)}
                 placeholder="Ex.: Claudio / Synora Lab"
-                className="mt-1 block w-full rounded-xl bg-white/70 p-2 text-sm text-slate-950 placeholder:text-slate-500 ring-1 ring-slate-900/10"
+                className="syn-input"
               />
             </div>
           </div>
@@ -294,7 +294,7 @@ export default function UploadPage() {
             <button
               disabled={!canUpload}
               onClick={onUploadOnly}
-              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm ring-1 ring-slate-900/20 disabled:opacity-50"
+              className="syn-btn-solid"
             >
               {busy ? "Enviando…" : uploadOk ? "Upload concluído" : "Carregar arquivo"}
             </button>
@@ -302,22 +302,22 @@ export default function UploadPage() {
             <button
               disabled={!canValidate}
               onClick={onValidateGuardian}
-              className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm ring-1 ring-emerald-900/20 disabled:opacity-50"
+              className="syn-btn-cta"
             >
               {busy ? "Validando…" : "Validar com Guardian"}
             </button>
             <Link
               href="/studio/library"
-              className="rounded-xl bg-white/70 px-4 py-2 text-sm text-slate-900 ring-1 ring-slate-900/10 backdrop-blur hover:bg-white/85"
+              className="syn-btn-ghost"
             >
               {savedTrackId ? "Ver na biblioteca" : "Ir para biblioteca"}
             </Link>
           </div>
         </div>
 
-        <div className="rounded-2xl bg-white/60 p-6 ring-1 ring-slate-900/10 backdrop-blur">
-          <div className="text-xs font-semibold text-slate-950">Saída do Guardian</div>
-          <div className="mt-2 text-xs text-slate-700">
+        <div className="syn-card-soft p-7">
+          <div className="text-xs font-semibold text-white">Saída do Guardian</div>
+          <div className="mt-2 text-xs text-slate-300/80">
             Status esperado: APPROVED / APPROVED_WITH_ADJUSTMENTS / BLOCKED.
           </div>
 
@@ -341,13 +341,13 @@ export default function UploadPage() {
                   {status}
                 </span>
                 {g.correlation_id && (
-                  <span className="rounded-full bg-white/70 px-3 py-1 text-xs text-slate-900 ring-1 ring-slate-900/10">
-                    ID de rastreio: <span className="font-semibold">{String(g.correlation_id)}</span>
+                  <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-slate-100 ring-1 ring-white/10">
+                    ID de rastreio: <span className="font-semibold text-white">{String(g.correlation_id)}</span>
                   </span>
                 )}
                 {typeof g.risk_score === "number" && (
-                  <span className="rounded-full bg-white/70 px-3 py-1 text-xs text-slate-900 ring-1 ring-slate-900/10">
-                    risk: <span className="font-semibold">{g.risk_score}</span>
+                  <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-slate-100 ring-1 ring-white/10">
+                    risk: <span className="font-semibold text-white">{g.risk_score}</span>
                   </span>
                 )}
               </div>
@@ -355,8 +355,8 @@ export default function UploadPage() {
           })()}
 
           {savedTrackId && (
-            <div className="mt-3 rounded-xl bg-white/70 p-3 text-xs ring-1 ring-slate-900/10">
-              Track salva: <span className="font-semibold text-slate-950">{savedTrackId}</span>
+            <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-3 text-xs">
+              Track salva: <span className="font-semibold text-white">{savedTrackId}</span>
             </div>
           )}
 

@@ -208,8 +208,8 @@ export default function LibraryPage() {
             }}
             className={`rounded-xl px-3 py-2 text-xs font-semibold ring-1 transition ${
               view === "active"
-                ? "bg-white/85 text-slate-950 ring-slate-900/10"
-                : "bg-white/60 text-slate-800 ring-slate-900/10 hover:bg-white/75"
+                ? "bg-white/10 text-white ring-white/15"
+                : "bg-white/5 text-slate-200 ring-white/10 hover:bg-white/10"
             }`}
           >
             Biblioteca
@@ -221,8 +221,8 @@ export default function LibraryPage() {
             }}
             className={`rounded-xl px-3 py-2 text-xs font-semibold ring-1 transition ${
               view === "trash"
-                ? "bg-white/85 text-slate-950 ring-slate-900/10"
-                : "bg-white/60 text-slate-800 ring-slate-900/10 hover:bg-white/75"
+                ? "bg-white/10 text-white ring-white/15"
+                : "bg-white/5 text-slate-200 ring-white/10 hover:bg-white/10"
             }`}
           >
             Lixeira
@@ -239,22 +239,22 @@ export default function LibraryPage() {
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl bg-white/70 p-4 ring-1 ring-slate-900/10 backdrop-blur">
-          <div className="text-xs text-slate-700">Faixas</div>
-          <div className="text-xl font-semibold text-slate-950">{stats.total}</div>
+        <div className="syn-card p-5">
+          <div className="text-xs text-slate-300">Faixas</div>
+          <div className="text-xl font-semibold text-white">{stats.total}</div>
         </div>
-        <div className="rounded-2xl bg-white/70 p-4 ring-1 ring-slate-900/10 backdrop-blur">
-          <div className="text-xs text-slate-700">Aprovadas</div>
-          <div className="text-xl font-semibold text-slate-950">{stats.approved}</div>
+        <div className="syn-card p-5">
+          <div className="text-xs text-slate-300">Aprovadas</div>
+          <div className="text-xl font-semibold text-white">{stats.approved}</div>
         </div>
-        <div className="rounded-2xl bg-white/70 p-4 ring-1 ring-slate-900/10 backdrop-blur">
-          <div className="text-xs text-slate-700">Bloqueadas</div>
-          <div className="text-xl font-semibold text-slate-950">{stats.blocked}</div>
+        <div className="syn-card p-5">
+          <div className="text-xs text-slate-300">Bloqueadas</div>
+          <div className="text-xl font-semibold text-white">{stats.blocked}</div>
         </div>
       </div>
 
-      <div className="mt-5 overflow-hidden rounded-2xl bg-white/60 ring-1 ring-slate-900/10 backdrop-blur">
-        <div className="grid grid-cols-12 gap-2 border-b border-slate-900/10 px-4 py-3 text-xs font-semibold text-slate-700">
+      <div className="mt-5 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/30 shadow-[0_18px_50px_-26px_rgba(0,0,0,0.7)] backdrop-blur">
+        <div className="grid grid-cols-12 gap-2 border-b border-white/10 px-4 py-3 text-xs font-semibold text-slate-200/90">
           <div className="col-span-5">Faixa</div>
           <div className="col-span-3">Guardian</div>
           <div className="col-span-2">Distribuição</div>
@@ -262,19 +262,19 @@ export default function LibraryPage() {
         </div>
 
         {loading && (
-          <div className="px-4 py-6 text-sm text-slate-800">Carregando…</div>
+          <div className="px-4 py-6 text-sm text-slate-200/90">Carregando…</div>
         )}
         {error && (
-          <div className="px-4 py-6 text-sm text-red-100">
+          <div className="px-4 py-6 text-sm text-rose-100">
             Erro: {error}
-            <div className="mt-1 text-xs text-slate-200/80">
+            <div className="mt-1 text-xs text-slate-300/80">
               Dica: configure NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY na Vercel.
             </div>
           </div>
         )}
 
         {!loading && !error && tracks.length === 0 && (
-          <div className="px-4 py-6 text-sm text-slate-800">
+          <div className="px-4 py-6 text-sm text-slate-200/90">
             {view === "trash" ? (
               <>Nenhuma faixa na lixeira.</>
             ) : (
@@ -284,23 +284,23 @@ export default function LibraryPage() {
         )}
 
         {!loading && !error && tracks.map((t) => (
-          <div key={t.id} className="grid grid-cols-12 gap-2 px-4 py-3 text-sm">
+          <div key={t.id} className="grid grid-cols-12 gap-2 px-4 py-3 text-sm hover:bg-white/[0.04] transition">
             <div className="col-span-5">
-              <div className="font-semibold text-slate-950">{t.title}</div>
-              <div className="text-xs text-slate-700">
+              <div className="font-semibold text-white">{t.title}</div>
+              <div className="text-xs text-slate-300/80">
                 {t.artist} • {t.id}
                 {view === "trash" && t.deletedAt ? (
-                  <span className="text-slate-600"> • apagada há {fmtDeletedAgo(t.deletedAt)}</span>
+                  <span className="text-slate-400"> • apagada há {fmtDeletedAgo(t.deletedAt)}</span>
                 ) : null}
               </div>
             </div>
             <div className="col-span-3">
-              <span className="rounded-full bg-white/80 px-2 py-1 text-xs text-slate-950 ring-1 ring-slate-900/10">
+              <span className="syn-badge-neutral">
                 {t.guardianStatus}
               </span>
             </div>
             <div className="col-span-2">
-              <span className="rounded-full bg-white/80 px-2 py-1 text-xs text-slate-950 ring-1 ring-slate-900/10">
+              <span className="syn-badge-neutral">
                 {t.distributionStatus}
               </span>
             </div>
@@ -310,14 +310,14 @@ export default function LibraryPage() {
                   <>
                     <button
                       onClick={() => restoreTrack(t.id)}
-                      className="rounded-xl bg-emerald-700 px-3 py-2 text-xs font-semibold text-white shadow-sm ring-1 ring-emerald-900/20 hover:bg-emerald-800"
+                      className="syn-btn-cta px-3 py-2 text-xs"
                       title="Restaurar"
                     >
                       Restaurar
                     </button>
                     <button
                       onClick={() => hardDeleteTrack(t.id)}
-                      className="rounded-xl bg-rose-700 px-3 py-2 text-xs font-semibold text-white shadow-sm ring-1 ring-rose-900/20 hover:bg-rose-800"
+                      className="syn-btn-danger px-3 py-2 text-xs"
                       title="Excluir definitivamente"
                     >
                       Excluir
@@ -326,7 +326,7 @@ export default function LibraryPage() {
                 ) : (
                   <button
                     onClick={() => trashTrack(t.id)}
-                    className="rounded-xl bg-white/80 px-3 py-2 text-xs font-semibold text-slate-950 ring-1 ring-slate-900/10 hover:bg-white"
+                    className="syn-btn-ghost px-3 py-2 text-xs"
                     title="Excluir"
                   >
                     🗑️
@@ -334,7 +334,7 @@ export default function LibraryPage() {
                 )}
                 <button
                   onClick={() => markDistribution(t.id)}
-                  className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-sm ring-1 ring-slate-900/20 hover:bg-slate-950"
+                  className="syn-btn-solid px-3 py-2 text-xs"
                 >
                   Distribuir (stub)
                 </button>

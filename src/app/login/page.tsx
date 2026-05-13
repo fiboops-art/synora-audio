@@ -46,9 +46,9 @@ export default function LoginPage() {
 
   return (
     <main className="mx-auto w-full max-w-lg px-4 py-12">
-      <div className="rounded-2xl bg-white/10 p-6 text-slate-50 ring-1 ring-white/15 backdrop-blur">
+      <div className="syn-card p-7">
         <div className="text-sm font-semibold">Entrar</div>
-        <div className="mt-1 text-sm text-slate-200">
+        <div className="mt-1 text-sm text-slate-200/90">
           Receba um link mágico por email para acessar o Synora Audio.
         </div>
 
@@ -58,7 +58,7 @@ export default function LoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="seu@email.com"
-            className="mt-1 block w-full rounded-xl bg-white/80 p-2 text-sm text-slate-950 placeholder:text-slate-500 ring-1 ring-white/20"
+            className="syn-input"
             inputMode="email"
             autoComplete="email"
           />
@@ -69,12 +69,12 @@ export default function LoginPage() {
         <button
           onClick={sendLink}
           disabled={busy || !email.trim()}
-          className="mt-5 w-full rounded-xl bg-white/15 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/20 disabled:opacity-50"
+          className="mt-5 w-full syn-btn-primary"
         >
           {busy ? "Enviando…" : sent ? "Link enviado ✅" : "Enviar Magic Link"}
         </button>
 
-        <div className="mt-3 text-xs text-slate-300">
+        <div className="mt-3 text-xs text-slate-300/90">
           Dica: confira spam/promotions. O link expira.
         </div>
       </div>

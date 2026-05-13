@@ -4,7 +4,9 @@
   --background: #ffffff;
   --foreground: #171717;
 
-  --bg-overlay: linear-gradient(180deg, rgba(7, 24, 39, 0.55), rgba(7, 24, 39, 0.85));
+  /* Background overlay tuned for legibility (UI should pop; background should support). */
+  --bg-overlay: radial-gradient(1200px 700px at 18% 12%, rgba(34, 211, 238, 0.12), transparent 55%),
+    linear-gradient(180deg, rgba(7, 16, 28, 0.55), rgba(7, 16, 28, 0.88));
   --synora-audio-bg: url("/backgrounds/synora-audio-bg-desktop-v1.png");
 }
 
@@ -29,7 +31,60 @@ body {
   background-repeat: no-repeat;
   background-attachment: fixed;
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+    Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer components {
+  /* Premium dark card surface */
+  .syn-card {
+    @apply rounded-2xl border border-white/10 bg-slate-950/35 shadow-[0_18px_50px_-26px_rgba(0,0,0,0.7)] backdrop-blur;
+  }
+  .syn-card-soft {
+    @apply rounded-2xl border border-white/10 bg-white/5 shadow-[0_18px_50px_-26px_rgba(0,0,0,0.7)] backdrop-blur;
+  }
+
+  /* Buttons */
+  .syn-btn-primary {
+    @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold ring-1 ring-white/15 bg-white/10 text-white transition hover:bg-white/15;
+  }
+  .syn-btn-solid {
+    @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold ring-1 ring-slate-900/40 bg-slate-900 text-white transition hover:bg-slate-950;
+  }
+  .syn-btn-cta {
+    @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold ring-1 ring-emerald-900/25 bg-emerald-600 text-white transition hover:bg-emerald-500;
+  }
+  .syn-btn-danger {
+    @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold ring-1 ring-rose-900/25 bg-rose-600 text-white transition hover:bg-rose-500;
+  }
+  .syn-btn-ghost {
+    @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold ring-1 ring-white/10 bg-white/5 text-slate-100 transition hover:bg-white/10;
+  }
+  .syn-btn:disabled {
+    @apply opacity-50;
+  }
+
+  /* Badges */
+  .syn-badge-ok {
+    @apply inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ring-1 bg-emerald-500/15 text-emerald-100 ring-emerald-400/20 shadow-[0_0_0_1px_rgba(16,185,129,0.06),0_0_22px_-14px_rgba(16,185,129,0.55)];
+  }
+  .syn-badge-warn {
+    @apply inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ring-1 bg-amber-500/15 text-amber-100 ring-amber-400/20;
+  }
+  .syn-badge-bad {
+    @apply inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ring-1 bg-rose-500/15 text-rose-100 ring-rose-400/20 shadow-[0_0_0_1px_rgba(244,63,94,0.06),0_0_22px_-14px_rgba(244,63,94,0.55)];
+  }
+  .syn-badge-neutral {
+    @apply inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ring-1 bg-white/6 text-slate-100 ring-white/10;
+  }
+
+  /* Inputs */
+  .syn-input {
+    @apply mt-1 block w-full rounded-xl border border-white/10 bg-white/5 p-2 text-sm text-slate-50 placeholder:text-slate-400 shadow-sm outline-none ring-0 transition focus:border-cyan-300/35 focus:shadow-[0_0_0_3px_rgba(34,211,238,0.12)];
+  }
 }
 
 @media (max-width: 768px) {
