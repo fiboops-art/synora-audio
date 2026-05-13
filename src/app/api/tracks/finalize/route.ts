@@ -104,6 +104,13 @@ export async function POST(req: Request) {
         correlation_id,
         content_type: "application/json",
       },
+      // Guardian Stage A in our current middleware expects minimal "debtor" fields.
+      // Synora-Audio has no debtor; provide a non-PII demo stub to satisfy schema.
+      debtor: {
+        full_name: "DEMO_USER",
+        document_type: "OTHER",
+        document_id: "DEMO",
+      },
       request: {
         operation: "upload_precheck",
         // Explicitly mark as single-item validation (not an aggregated export).
