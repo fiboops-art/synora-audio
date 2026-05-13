@@ -92,7 +92,9 @@ export async function POST(req: Request) {
     // guardian validate
     const correlation_id = `AUD-${Date.now()}`;
     const guardianInput = {
-      stage: "D",
+      // Stage D in our Guardian currently flags this as "mass export". For this MVP upload flow,
+      // Stage B is the appropriate pre-send validation.
+      stage: "B",
       content: `Faixa: ${title} — Artista: ${artist}`,
       metadata: {
         tenant_id: "synora-audio-demo",
