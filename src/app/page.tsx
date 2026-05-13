@@ -5,13 +5,13 @@ function Header() {
   return (
     <header className="relative mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4">
       <div className="flex items-center gap-3">
-        <div className="grid h-10 w-10 place-items-center rounded-xl bg-white/5 ring-1 ring-white/10 backdrop-blur">
+        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/0 ring-1 ring-white/10 backdrop-blur">
           <Image
             src="/synora-logo-256.png"
             alt="Synora"
-            width={34}
-            height={34}
-            className="h-8 w-8 drop-shadow-[0_10px_28px_rgba(0,0,0,0.55)]"
+            width={44}
+            height={44}
+            className="h-10 w-10 drop-shadow-[0_10px_28px_rgba(0,0,0,0.55)]"
             priority
           />
         </div>
