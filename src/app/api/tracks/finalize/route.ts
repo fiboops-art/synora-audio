@@ -5,6 +5,19 @@ import { validateWithGuardian } from "@/lib/guardianClient";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function decodeJwtPayload(token: string): any {
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64 + "===".slice((b64.length + 3) % 4);
+    const json = Buffer.from(padded, "base64").toString("utf8");
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const auth = req.headers.get("authorization") || "";
@@ -29,7 +42,35 @@ export async function POST(req: Request) {
 
     const { data: userData, error: userErr } = await supabase.auth.getUser(token);
     if (userErr || !userData.user) {
-      return NextResponse.json({ error: "Invalid session" }, { status: 401 });
+      const payload = decodeJwtPayload(token);
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null;
+      return NextResponse.json(
+        {
+          error: "Invalid session",
+          diag: {
+            now: new Date().toISOString(),
+            jwt: payload
+              ? {
+                  iss: payload.iss ?? null,
+                  aud: payload.aud ?? null,
+                  sub: payload.sub ?? null,
+                  exp: payload.exp ?? null,
+                  iat: payload.iat ?? null,
+                  role: payload.role ?? null,
+                }
+              : null,
+            supabaseUrlHost: url ? (() => {
+              try {
+                return new URL(url).host;
+              } catch {
+                return null;
+              }
+            })() : null,
+            userErr: userErr?.message ?? null,
+          },
+        },
+        { status: 401 }
+      );
     }
     const uid = userData.user.id;
 
