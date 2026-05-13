@@ -28,7 +28,7 @@ export async function POST(req: Request) {
 
     const supabase = getSupabaseAuthed(token);
 
-    const { data: userData, error: userErr } = await supabase.auth.getUser();
+    const { data: userData, error: userErr } = await supabase.auth.getUser(token);
     if (userErr || !userData.user) {
       return NextResponse.json({ error: "Invalid session" }, { status: 401 });
     }
