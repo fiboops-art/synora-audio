@@ -16,6 +16,18 @@ type Track = {
   deletedAt?: string | null;
 };
 
+function guardianBadgeClass(status: Track["guardianStatus"]) {
+  if (status === "BLOCKED") return "syn-badge-bad";
+  if (status.startsWith("APPROVED")) return "syn-badge-ok";
+  return "syn-badge-neutral";
+}
+
+function distBadgeClass(status: Track["distributionStatus"]) {
+  if (status === "SENT") return "syn-badge-ok";
+  if (status === "QUEUED") return "syn-badge-warn";
+  return "syn-badge-neutral";
+}
+
 function fmtDeletedAgo(iso?: string | null): string {
   if (!iso) return "";
   const t = new Date(iso).getTime();
@@ -295,12 +307,12 @@ export default function LibraryPage() {
               </div>
             </div>
             <div className="col-span-3">
-              <span className="syn-badge-neutral">
+              <span className={guardianBadgeClass(t.guardianStatus)}>
                 {t.guardianStatus}
               </span>
             </div>
             <div className="col-span-2">
-              <span className="syn-badge-neutral">
+              <span className={distBadgeClass(t.distributionStatus)}>
                 {t.distributionStatus}
               </span>
             </div>
