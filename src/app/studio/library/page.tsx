@@ -126,10 +126,16 @@ export default function LibraryPage() {
   }
 
   async function hardDeleteTrack(id: string) {
-    const ok = window.confirm(
+    const first = window.confirm(
       "Excluir definitivamente? Isso remove do banco e tenta apagar o arquivo do Storage. (Ação irreversível)"
     );
-    if (!ok) return;
+    if (!first) return;
+
+    const typed = window.prompt('Para confirmar, digite EXCLUIR');
+    if ((typed ?? "").trim().toUpperCase() !== "EXCLUIR") {
+      alert("Confirmação cancelada.");
+      return;
+    }
     try {
       const token = await getAccessToken();
       if (!token) throw new Error("Sessão expirada. Faça login novamente.");
