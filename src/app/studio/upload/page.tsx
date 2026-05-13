@@ -342,7 +342,7 @@ export default function UploadPage() {
                 </span>
                 {g.correlation_id && (
                   <span className="rounded-full bg-white/70 px-3 py-1 text-xs text-slate-900 ring-1 ring-slate-900/10">
-                    ID: <span className="font-semibold">{String(g.correlation_id)}</span>
+                    ID de rastreio: <span className="font-semibold">{String(g.correlation_id)}</span>
                   </span>
                 )}
                 {typeof g.risk_score === "number" && (
