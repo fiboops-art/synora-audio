@@ -16,6 +16,9 @@ export default function UploadPage() {
   const [guardianOut, setGuardianOut] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [savedTrackId, setSavedTrackId] = useState<string | null>(null);
+  const [uploadedPath, setUploadedPath] = useState<string | null>(null);
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
+  const [uploadOk, setUploadOk] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -25,54 +28,111 @@ export default function UploadPage() {
     })();
   }, [router]);
 
-  const canSubmit = useMemo(() => {
-    if (mode === "upload") return !!file && !!title.trim() && !!artist.trim();
-    return !!title.trim() && !!artist.trim();
-  }, [mode, file, title, artist]);
+  const canUpload = useMemo(() => {
+    if (mode !== "upload") return false;
+    return !!file && !!title.trim() && !!artist.trim() && !busy;
+  }, [mode, file, title, artist, busy]);
 
-  async function onValidate() {
+  const canValidate = useMemo(() => {
+    if (busy) return false;
+    if (mode === "upload") return uploadOk && !!savedTrackId && !!uploadedPath;
+    return !!title.trim() && !!artist.trim();
+  }, [busy, mode, uploadOk, savedTrackId, uploadedPath, title, artist]);
+
+  function resetUploadState() {
+    setSavedTrackId(null);
+    setUploadedPath(null);
+    setUploadPct(null);
+    setUploadOk(false);
+  }
+
+  async function putWithProgress(url: string, fileToSend: File): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", url, true);
+      xhr.setRequestHeader("content-type", fileToSend.type || "application/octet-stream");
+      xhr.upload.onprogress = (ev) => {
+        if (!ev.lengthComputable) return;
+        const pct = Math.round((ev.loaded / ev.total) * 100);
+        setUploadPct(Math.max(0, Math.min(100, pct)));
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) return resolve();
+        reject(new Error(`Upload falhou (status ${xhr.status})`));
+      };
+      xhr.onerror = () => reject(new Error("Upload falhou (network error)"));
+      xhr.send(fileToSend);
+    });
+  }
+
+  async function onUploadOnly() {
     setBusy(true);
     setGuardianOut(null);
-    setSavedTrackId(null);
+    resetUploadState();
     try {
-      if (mode === "upload" && file) {
-        // Large files: avoid Vercel request limits by uploading directly to Supabase via signed URL
+      if (!file) {
+        setGuardianOut({ error: "Selecione um arquivo" });
+        return;
+      }
+
+      const token = await getAccessToken();
+      if (!token) {
+        setGuardianOut({ error: "Você precisa estar logado para fazer upload" });
+        return;
+      }
+
+      const startRes = await fetch("/api/tracks/start-upload", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          title,
+          artist,
+          file_name: file.name,
+          file_type: file.type,
+          file_size: file.size,
+        }),
+      });
+      const start = (await startRes.json()) as { trackId?: string; path?: string; signedUrl?: string };
+      if (!startRes.ok) {
+        setGuardianOut(start);
+        return;
+      }
+      if (!start.trackId || !start.path || !start.signedUrl) {
+        setGuardianOut({ error: "Resposta inválida do start-upload" });
+        return;
+      }
+
+      setSavedTrackId(start.trackId);
+      setUploadedPath(start.path);
+      setUploadPct(0);
+
+      await putWithProgress(start.signedUrl, file);
+
+      setUploadPct(100);
+      setUploadOk(true);
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === "object" && "message" in e && typeof (e as { message?: unknown }).message === "string"
+          ? (e as { message: string }).message
+          : "Falha no upload";
+      setGuardianOut({ error: msg });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onValidateGuardian() {
+    setBusy(true);
+    setGuardianOut(null);
+    try {
+      if (mode === "upload") {
         const token = await getAccessToken();
         if (!token) {
-          setGuardianOut({ error: "Você precisa estar logado para fazer upload" });
+          setGuardianOut({ error: "Sessão expirada. Faça login novamente." });
           return;
         }
-        const startRes = await fetch("/api/tracks/start-upload", {
-          method: "POST",
-          headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            title,
-            artist,
-            file_name: file.name,
-            file_type: file.type,
-            file_size: file.size,
-          }),
-        });
-        const start = await startRes.json();
-        if (!startRes.ok) {
-          setGuardianOut(start);
-          return;
-        }
-
-        setSavedTrackId(start.trackId ?? null);
-
-        const up = await fetch(start.signedUrl, {
-          method: "PUT",
-          headers: { "content-type": file.type || "application/octet-stream" },
-          body: file,
-        });
-        if (!up.ok) {
-          const t = await up.text().catch(() => "");
-          setGuardianOut({
-            error: "Upload direto ao Storage falhou",
-            status: up.status,
-            text: t.slice(0, 500),
-          });
+        if (!savedTrackId || !uploadedPath) {
+          setGuardianOut({ error: "Faça o upload primeiro" });
           return;
         }
 
@@ -80,10 +140,10 @@ export default function UploadPage() {
           method: "POST",
           headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
           body: JSON.stringify({
-            trackId: start.trackId,
-            path: start.path,
-            file_type: file.type,
-            file_size: file.size,
+            trackId: savedTrackId,
+            path: uploadedPath,
+            file_type: file?.type,
+            file_size: file?.size,
             title,
             artist,
           }),
@@ -93,11 +153,11 @@ export default function UploadPage() {
           setGuardianOut(fin);
           return;
         }
-        setGuardianOut(fin.guardian ?? fin);
+        setGuardianOut((fin as { guardian?: unknown }).guardian ?? fin);
         return;
       }
 
-      // Fallback (no file): only Guardian precheck
+      // IA/stub: only Guardian precheck
       const out = await validateWithGuardian({
         stage: "D",
         content: `Faixa: ${title} — Artista: ${artist}`,
@@ -167,12 +227,38 @@ export default function UploadPage() {
               <input
                 type="file"
                 accept="audio/*"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                onChange={(e) => {
+                  setFile(e.target.files?.[0] || null);
+                  setGuardianOut(null);
+                  resetUploadState();
+                }}
                 className="mt-1 block w-full rounded-xl bg-white/70 p-2 text-sm text-slate-950 file:text-slate-950 ring-1 ring-slate-900/10"
               />
               <div className="mt-1 text-xs text-slate-600">
                 * Upload real: usa URL assinada (não passa pelo limite da Vercel). Requer bucket <span className="font-semibold">tracks</span> no Supabase Storage + <span className="font-semibold">SUPABASE_SERVICE_ROLE_KEY</span> na Vercel.
               </div>
+
+              {file && (
+                <div className="mt-3 rounded-xl bg-white/70 p-3 text-xs ring-1 ring-slate-900/10">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-slate-900">
+                      <span className="font-semibold">Arquivo:</span> {file.name}
+                    </div>
+                    <div className={`font-semibold ${uploadOk ? "text-emerald-700" : "text-slate-700"}`}>
+                      {uploadOk ? "Pronto ✅" : uploadPct !== null ? `Enviando… ${uploadPct}%` : "Aguardando upload"}
+                    </div>
+                  </div>
+
+                  {uploadPct !== null && (
+                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200 ring-1 ring-slate-900/10">
+                      <div
+                        className={`h-full ${uploadOk ? "bg-emerald-500" : "bg-slate-900"}`}
+                        style={{ width: `${uploadPct}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -199,9 +285,17 @@ export default function UploadPage() {
 
           <div className="mt-5 flex flex-wrap gap-2">
             <button
-              disabled={!canSubmit || busy}
-              onClick={onValidate}
+              disabled={!canUpload}
+              onClick={onUploadOnly}
               className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm ring-1 ring-slate-900/20 disabled:opacity-50"
+            >
+              {busy ? "Enviando…" : uploadOk ? "Upload concluído" : "Carregar arquivo"}
+            </button>
+
+            <button
+              disabled={!canValidate}
+              onClick={onValidateGuardian}
+              className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm ring-1 ring-emerald-900/20 disabled:opacity-50"
             >
               {busy ? "Validando…" : "Validar com Guardian"}
             </button>
