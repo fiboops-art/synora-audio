@@ -130,15 +130,7 @@ export async function POST(req: Request) {
 
     const guardian = await validateWithGuardian(guardianInput);
 
-    // Attach a small debug echo so the UI can confirm what was sent (without leaking secrets).
-    (guardian as any)._diag = {
-      sent: {
-        stage: guardianInput.stage,
-        correlation_id,
-        debtor: (guardianInput as any).debtor ?? null,
-        request: guardianInput.request,
-      },
-    };
+    // NOTE: keep production response clean (no debug echo).
 
     const guardian_status = guardian.status;
 
