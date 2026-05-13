@@ -135,6 +135,7 @@ export async function POST(req: Request) {
       sent: {
         stage: guardianInput.stage,
         correlation_id,
+        debtor: (guardianInput as any).debtor ?? null,
         request: guardianInput.request,
       },
     };
