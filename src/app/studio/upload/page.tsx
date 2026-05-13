@@ -7,6 +7,13 @@ import { getAccessToken } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabaseClient";
 
+type GuardianLike = {
+  status?: string;
+  risk_score?: number;
+  correlation_id?: string;
+  issues?: unknown[];
+};
+
 export default function UploadPage() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
@@ -303,7 +310,7 @@ export default function UploadPage() {
               href="/studio/library"
               className="rounded-xl bg-white/70 px-4 py-2 text-sm text-slate-900 ring-1 ring-slate-900/10 backdrop-blur hover:bg-white/85"
             >
-              Ir para biblioteca
+              {savedTrackId ? "Ver na biblioteca" : "Ir para biblioteca"}
             </Link>
           </div>
         </div>
@@ -313,6 +320,39 @@ export default function UploadPage() {
           <div className="mt-2 text-xs text-slate-700">
             Status esperado: APPROVED / APPROVED_WITH_ADJUSTMENTS / BLOCKED.
           </div>
+
+          {(() => {
+            const g = (guardianOut && typeof guardianOut === "object"
+              ? (guardianOut as GuardianLike)
+              : null);
+            if (!g?.status) return null;
+
+            const status = String(g.status);
+            const tone =
+              status === "BLOCKED"
+                ? "bg-rose-600 text-white ring-rose-900/20"
+                : status.startsWith("APPROVED")
+                  ? "bg-emerald-600 text-white ring-emerald-900/20"
+                  : "bg-slate-800 text-white ring-slate-900/20";
+
+            return (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${tone}`}>
+                  {status}
+                </span>
+                {g.correlation_id && (
+                  <span className="rounded-full bg-white/70 px-3 py-1 text-xs text-slate-900 ring-1 ring-slate-900/10">
+                    correlation_id: <span className="font-semibold">{String(g.correlation_id)}</span>
+                  </span>
+                )}
+                {typeof g.risk_score === "number" && (
+                  <span className="rounded-full bg-white/70 px-3 py-1 text-xs text-slate-900 ring-1 ring-slate-900/10">
+                    risk: <span className="font-semibold">{g.risk_score}</span>
+                  </span>
+                )}
+              </div>
+            );
+          })()}
 
           {savedTrackId && (
             <div className="mt-3 rounded-xl bg-white/70 p-3 text-xs ring-1 ring-slate-900/10">
