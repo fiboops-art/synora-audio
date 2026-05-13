@@ -115,6 +115,9 @@ export async function PATCH(req: Request) {
     }
     const uid = userData.user.id;
 
+    const isSoftDeleting = typeof body.deleted_at === "string" && body.deleted_at.length > 0;
+    const isRestoring = body.deleted_at === null;
+
     const { data, error } = await service
       .from("tracks")
       .update({
@@ -125,6 +128,7 @@ export async function PATCH(req: Request) {
         file_mime: body.file_mime,
         file_size: body.file_size,
         deleted_at: body.deleted_at ?? undefined,
+        deleted_by: isSoftDeleting ? uid : isRestoring ? null : undefined,
       })
       .eq("id", body.id)
       .eq("user_id", uid)
