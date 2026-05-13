@@ -13,10 +13,35 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://synora-audio.vercel.app"),
   title: "Synora Audio",
   description: "Infraestrutura inteligente de distribuição e monetização para música IA",
   icons: {
-    icon: "/synora-logo-256.png",
+    icon: [
+      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  openGraph: {
+    title: "Synora Audio",
+    description: "Infraestrutura para creators de música IA",
+    images: [
+      {
+        url: "/og.png",
+        width: 1200,
+        height: 630,
+        alt: "Synora Audio",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Synora Audio",
+    description: "Infraestrutura para creators de música IA",
+    images: ["/og.png"],
   },
 };
 
