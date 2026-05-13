@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   title: "Synora Audio",
   description: "Infraestrutura inteligente de distribuição e monetização para música IA",
   icons: {
-    icon: "/synora-logo.svg",
+    icon: "/synora-logo-256.png",
   },
 };
 
