@@ -2,13 +2,17 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 // Keep a single browser client instance so autoRefreshToken can actually run.
 // (Creating a new client on each call often leads to expired access tokens.)
+type GlobalWithSupabase = typeof globalThis & {
+  __synora_supabase_client?: SupabaseClient;
+};
+
 function getSingleton(): SupabaseClient | null {
-  const g = globalThis as any;
-  return (g.__synora_supabase_client as SupabaseClient | undefined) ?? null;
+  const g = globalThis as GlobalWithSupabase;
+  return g.__synora_supabase_client ?? null;
 }
 
 function setSingleton(client: SupabaseClient) {
-  const g = globalThis as any;
+  const g = globalThis as GlobalWithSupabase;
   g.__synora_supabase_client = client;
 }
 

@@ -32,18 +32,26 @@ export default function LibraryPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "Failed to load tracks");
-      const rows = (data.tracks ?? []) as any[];
-      const mapped: Track[] = rows.map((r) => ({
-        id: r.id,
-        title: r.title,
-        artist: r.artist,
-        createdAt: r.created_at,
-        guardianStatus: r.guardian_status,
-        distributionStatus: r.distribution_status,
-      }));
+      const rows = (Array.isArray(data?.tracks) ? (data.tracks as unknown[]) : []) as unknown[];
+      const mapped: Track[] = rows
+        .map((r) => (r && typeof r === "object" ? (r as Record<string, unknown>) : null))
+        .filter((r): r is Record<string, unknown> => !!r)
+        .map((r) => ({
+          id: String(r.id ?? ""),
+          title: String(r.title ?? ""),
+          artist: String(r.artist ?? ""),
+          createdAt: String(r.created_at ?? ""),
+          guardianStatus: String(r.guardian_status ?? "PENDING") as Track["guardianStatus"],
+          distributionStatus: String(r.distribution_status ?? "NOT_SENT") as Track["distributionStatus"],
+        }))
+        .filter((t) => !!t.id);
       setTracks(mapped);
-    } catch (e: any) {
-      setError(e?.message ?? "Error");
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === "object" && "message" in e && typeof (e as { message?: unknown }).message === "string"
+          ? (e as { message: string }).message
+          : "Error";
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -64,8 +72,12 @@ export default function LibraryPage() {
       if (!res.ok) throw new Error(data?.error ?? "Falha ao excluir");
       // Optimistic: remove from UI
       setTracks((cur) => cur.filter((t) => t.id !== id));
-    } catch (e: any) {
-      alert(e?.message ?? "Erro");
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === "object" && "message" in e && typeof (e as { message?: unknown }).message === "string"
+          ? (e as { message: string }).message
+          : "Erro";
+      alert(msg);
     }
   }
 

@@ -33,8 +33,12 @@ export default function LoginPage() {
       });
       if (error) throw error;
       setSent(true);
-    } catch (e: any) {
-      setErr(e?.message ?? "Falha ao enviar link");
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === "object" && "message" in e && typeof (e as { message?: unknown }).message === "string"
+          ? (e as { message: string }).message
+          : "Falha ao enviar link";
+      setErr(msg);
     } finally {
       setBusy(false);
     }
@@ -77,4 +81,3 @@ export default function LoginPage() {
     </main>
   );
 }
-

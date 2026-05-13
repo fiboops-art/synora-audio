@@ -5,17 +5,41 @@ import { validateWithGuardian } from "@/lib/guardianClient";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function decodeJwtPayload(token: string): any {
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const parts = token.split(".");
     if (parts.length < 2) return null;
     const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
     const padded = b64 + "===".slice((b64.length + 3) % 4);
     const json = Buffer.from(padded, "base64").toString("utf8");
-    return JSON.parse(json);
+    const parsed: unknown = JSON.parse(json);
+    if (parsed && typeof parsed === "object") return parsed as Record<string, unknown>;
+    return null;
   } catch {
     return null;
   }
+}
+
+function errMsg(e: unknown): string {
+  if (e && typeof e === "object" && "message" in e && typeof (e as { message?: unknown }).message === "string") {
+    return (e as { message: string }).message;
+  }
+  return "Unknown error";
+}
+
+function pickJwt(payload: Record<string, unknown> | null) {
+  if (!payload) return null;
+  const get = (k: string) => (k in payload ? payload[k] : null);
+  const asStr = (v: unknown) => (typeof v === "string" ? v : null);
+  const asNum = (v: unknown) => (typeof v === "number" ? v : null);
+  return {
+    iss: asStr(get("iss")),
+    aud: asStr(get("aud")),
+    sub: asStr(get("sub")),
+    exp: asNum(get("exp")),
+    iat: asNum(get("iat")),
+    role: asStr(get("role")),
+  };
 }
 
 export async function POST(req: Request) {
@@ -49,16 +73,7 @@ export async function POST(req: Request) {
           error: "Invalid session",
           diag: {
             now: new Date().toISOString(),
-            jwt: payload
-              ? {
-                  iss: payload.iss ?? null,
-                  aud: payload.aud ?? null,
-                  sub: payload.sub ?? null,
-                  exp: payload.exp ?? null,
-                  iat: payload.iat ?? null,
-                  role: payload.role ?? null,
-                }
-              : null,
+            jwt: pickJwt(payload),
             supabaseUrlHost: url ? (() => {
               try {
                 return new URL(url).host;
@@ -152,7 +167,7 @@ export async function POST(req: Request) {
     if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
 
     return NextResponse.json({ track: updated, guardian });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "Unknown error" }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: errMsg(e) }, { status: 500 });
   }
 }

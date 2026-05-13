@@ -4,6 +4,13 @@ import { getSupabaseService } from "@/lib/supabaseServer";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function errMsg(e: unknown): string {
+  if (e && typeof e === "object" && "message" in e && typeof (e as { message?: unknown }).message === "string") {
+    return (e as { message: string }).message;
+  }
+  return "Unknown error";
+}
+
 async function probeSupabaseRaw() {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -52,17 +59,20 @@ export async function GET(req: Request) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ tracks: data ?? [] });
-  } catch (e: any) {
-    let probe: any = null;
+  } catch (e: unknown) {
+    let probe: unknown = null;
     try {
       probe = await probeSupabaseRaw();
-    } catch (p: any) {
-      probe = { error: p?.message ?? String(p) };
+    } catch (p: unknown) {
+      probe = { error: errMsg(p) };
     }
     return NextResponse.json(
       {
-        error: e?.message ?? "Unknown error",
-        cause: e?.cause ? String(e.cause) : undefined,
+        error: errMsg(e),
+        cause:
+          e && typeof e === "object" && "cause" in e && (e as { cause?: unknown }).cause
+            ? String((e as { cause: unknown }).cause)
+            : undefined,
         probe,
       },
       { status: 500 }
@@ -90,7 +100,7 @@ export async function PATCH(req: Request) {
       id?: string;
       guardian_status?: string;
       distribution_status?: string;
-      guardian_raw?: any;
+      guardian_raw?: unknown;
       file_path?: string;
       file_mime?: string;
       file_size?: number;
@@ -122,7 +132,7 @@ export async function PATCH(req: Request) {
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ track: data });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "Unknown error" }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: errMsg(e) }, { status: 500 });
   }
 }

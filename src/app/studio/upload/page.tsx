@@ -13,7 +13,7 @@ export default function UploadPage() {
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
   const [mode, setMode] = useState<"upload" | "ai">("upload");
-  const [guardianOut, setGuardianOut] = useState<any>(null);
+  const [guardianOut, setGuardianOut] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [savedTrackId, setSavedTrackId] = useState<string | null>(null);
 

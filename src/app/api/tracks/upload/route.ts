@@ -107,8 +107,11 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ track: updated, guardian });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "Unknown error" }, { status: 500 });
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === "object" && "message" in e && typeof (e as { message?: unknown }).message === "string"
+        ? (e as { message: string }).message
+        : "Unknown error";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
-
