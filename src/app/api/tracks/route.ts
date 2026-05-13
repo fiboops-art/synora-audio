@@ -37,6 +37,10 @@ async function probeSupabaseRaw() {
 
 export async function GET(req: Request) {
   try {
+    const url = new URL(req.url);
+    const view = (url.searchParams.get("view") ?? "active").toLowerCase();
+    const wantTrashed = view === "trash" || view === "trashed";
+
     const auth = req.headers.get("authorization") || "";
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
     if (!token) {
@@ -50,12 +54,18 @@ export async function GET(req: Request) {
     }
 
     const uid = userData.user.id;
-    const { data, error } = await service
+
+    let q = service
       .from("tracks")
-      .select("id,title,artist,created_at,guardian_status,distribution_status")
+
+      // Include delete metadata for restore/audit UX.
+      .select("id,title,artist,created_at,guardian_status,distribution_status,deleted_at,deleted_by")
       .eq("user_id", uid)
-      .is("deleted_at", null)
       .order("created_at", { ascending: false });
+
+    q = wantTrashed ? q.not("deleted_at", "is", null) : q.is("deleted_at", null);
+
+    const { data, error } = await q;
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ tracks: data ?? [] });

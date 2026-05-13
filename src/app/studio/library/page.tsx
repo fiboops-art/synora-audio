@@ -13,20 +13,22 @@ type Track = {
   createdAt: string;
   guardianStatus: "PENDING" | "APPROVED" | "APPROVED_WITH_ADJUSTMENTS" | "BLOCKED";
   distributionStatus: "NOT_SENT" | "QUEUED" | "SENT";
+  deletedAt?: string | null;
 };
 
 export default function LibraryPage() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<"active" | "trash">("active");
   const router = useRouter();
 
-  async function refreshTracks() {
+  async function refreshTracks(nextView = view) {
     setLoading(true);
     setError(null);
     try {
       const token = await getAccessToken();
-      const res = await fetch("/api/tracks", {
+      const res = await fetch(`/api/tracks?view=${nextView}`, {
         cache: "no-store",
         headers: token ? { authorization: `Bearer ${token}` } : {},
       });
@@ -43,6 +45,7 @@ export default function LibraryPage() {
           createdAt: String(r.created_at ?? ""),
           guardianStatus: String(r.guardian_status ?? "PENDING") as Track["guardianStatus"],
           distributionStatus: String(r.distribution_status ?? "NOT_SENT") as Track["distributionStatus"],
+          deletedAt: (r.deleted_at ?? null) as string | null,
         }))
         .filter((t) => !!t.id);
       setTracks(mapped);
@@ -81,6 +84,31 @@ export default function LibraryPage() {
     }
   }
 
+  async function restoreTrack(id: string) {
+    const ok = window.confirm("Restaurar esta faixa da Lixeira?");
+    if (!ok) return;
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error("Sessão expirada. Faça login novamente.");
+      const res = await fetch("/api/tracks", {
+        method: "PATCH",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id, deleted_at: null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "Falha ao restaurar");
+
+      // Optimistic: remove from trash view
+      setTracks((cur) => cur.filter((t) => t.id !== id));
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === "object" && "message" in e && typeof (e as { message?: unknown }).message === "string"
+          ? (e as { message: string }).message
+          : "Erro";
+      alert(msg);
+    }
+  }
+
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -91,11 +119,12 @@ export default function LibraryPage() {
         return;
       }
 
-      if (mounted) await refreshTracks();
+      if (mounted) await refreshTracks("active");
     })();
     return () => {
       mounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   const stats = useMemo(() => {
@@ -124,6 +153,33 @@ export default function LibraryPage() {
           <div className="text-sm text-slate-200">Catálogo local do MVP.</div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={async () => {
+              setView("active");
+              await refreshTracks("active");
+            }}
+            className={`rounded-xl px-3 py-2 text-xs font-semibold ring-1 transition ${
+              view === "active"
+                ? "bg-white/85 text-slate-950 ring-slate-900/10"
+                : "bg-white/60 text-slate-800 ring-slate-900/10 hover:bg-white/75"
+            }`}
+          >
+            Biblioteca
+          </button>
+          <button
+            onClick={async () => {
+              setView("trash");
+              await refreshTracks("trash");
+            }}
+            className={`rounded-xl px-3 py-2 text-xs font-semibold ring-1 transition ${
+              view === "trash"
+                ? "bg-white/85 text-slate-950 ring-slate-900/10"
+                : "bg-white/60 text-slate-800 ring-slate-900/10 hover:bg-white/75"
+            }`}
+          >
+            Lixeira
+          </button>
+          <span className="text-slate-300">•</span>
           <Link href="/studio/upload" className="text-sm text-slate-200 hover:text-white">
             Enviar faixa
           </Link>
@@ -171,7 +227,11 @@ export default function LibraryPage() {
 
         {!loading && !error && tracks.length === 0 && (
           <div className="px-4 py-6 text-sm text-slate-800">
-            Nenhuma faixa ainda. Envie a primeira em <Link className="underline" href="/studio/upload">/studio/upload</Link>.
+            {view === "trash" ? (
+              <>Nenhuma faixa na lixeira.</>
+            ) : (
+              <>Nenhuma faixa ainda. Envie a primeira em <Link className="underline" href="/studio/upload">/studio/upload</Link>.</>
+            )}
           </div>
         )}
 
@@ -193,13 +253,23 @@ export default function LibraryPage() {
             </div>
             <div className="col-span-2 text-right">
               <div className="flex items-center justify-end gap-2">
-                <button
-                  onClick={() => trashTrack(t.id)}
-                  className="rounded-xl bg-white/80 px-3 py-2 text-xs font-semibold text-slate-950 ring-1 ring-slate-900/10 hover:bg-white"
-                  title="Excluir"
-                >
-                  🗑️
-                </button>
+                {view === "trash" ? (
+                  <button
+                    onClick={() => restoreTrack(t.id)}
+                    className="rounded-xl bg-emerald-700 px-3 py-2 text-xs font-semibold text-white shadow-sm ring-1 ring-emerald-900/20 hover:bg-emerald-800"
+                    title="Restaurar"
+                  >
+                    Restaurar
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => trashTrack(t.id)}
+                    className="rounded-xl bg-white/80 px-3 py-2 text-xs font-semibold text-slate-950 ring-1 ring-slate-900/10 hover:bg-white"
+                    title="Excluir"
+                  >
+                    🗑️
+                  </button>
+                )}
                 <button
                   onClick={() => markDistribution(t.id)}
                   className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-sm ring-1 ring-slate-900/20 hover:bg-slate-950"
