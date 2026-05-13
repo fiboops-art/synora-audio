@@ -10,7 +10,7 @@ function Header() {
           alt="Synora"
           width={44}
           height={44}
-          className="h-11 w-11 drop-shadow-[0_10px_28px_rgba(0,0,0,0.55)]"
+          className="h-11 w-11 drop-shadow-[0_8px_22px_rgba(0,0,0,0.42)]"
           priority
         />
         <div>
