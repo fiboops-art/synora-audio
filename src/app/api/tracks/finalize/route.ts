@@ -104,8 +104,16 @@ export async function POST(req: Request) {
       },
       request: {
         operation: "upload_precheck",
+        // Explicitly mark as single-item validation (not an aggregated export).
         scope: { fields: ["track.title", "track.artist", "track.file_path"] },
-        subject: { trackId: body.trackId, storagePath: body.path },
+        subject: {
+          kind: "single_track",
+          trackId: body.trackId,
+          storagePath: body.path,
+        },
+        justification:
+          "Validação de compliance para upload individual de uma faixa (MVP). Não é exportação em massa.",
+        approver: "system:synora-audio-mvp",
         retention: "30d",
         masking: true,
       },
