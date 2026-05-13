@@ -17,6 +17,22 @@ function decodeJwtPayload(token: string): any {
   }
 }
 
+function decodeServiceRoleDiag() {
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!service) return { present: false };
+  const payload = decodeJwtPayload(service);
+  return {
+    present: true,
+    jwt: payload
+      ? {
+          iss: payload.iss ?? null,
+          aud: payload.aud ?? null,
+          role: payload.role ?? null,
+        }
+      : null,
+  };
+}
+
 export async function POST(req: Request) {
   try {
     const auth = req.headers.get("authorization") || "";
@@ -95,7 +111,15 @@ export async function POST(req: Request) {
       .single();
 
     if (createErr || !created) {
-      return NextResponse.json({ error: createErr?.message ?? "Create failed" }, { status: 500 });
+      return NextResponse.json(
+        {
+          error: createErr?.message ?? "Create failed",
+          diag: {
+            serviceRole: decodeServiceRoleDiag(),
+          },
+        },
+        { status: 500 }
+      );
     }
 
     // 2) create signed upload URL
