@@ -87,7 +87,7 @@ export default function Dashboard() {
   const [loadingSplit, setLoadingSplit] = useState(false);
   const [loadedSplitInfo, setLoadedSplitInfo] = useState<string | null>(null);
   const [loadedSplitId, setLoadedSplitId] = useState<string | null>(null);
-  const [proposeResult, setProposeResult] = useState<string | null>(null);
+  const [proposeLinks, setProposeLinks] = useState<Array<{ email: string; url: string }> | null>(null);
 
   const partiesWithEmail = useMemo(
     () => parties.filter((p) => (p.email ?? "").trim().length > 0),
@@ -397,7 +397,7 @@ export default function Dashboard() {
       setLoadingSplit(true);
       setLoadedSplitInfo(null);
       setLoadedSplitId(null);
-      setProposeResult(null);
+      setProposeLinks(null);
       setSplitError(null);
       try {
         const res = await fetch(`/api/splits/recording?recording_id=${encodeURIComponent(recordingId)}`, {
@@ -440,7 +440,7 @@ export default function Dashboard() {
       return;
     }
     setSplitError(null);
-    setProposeResult(null);
+    setProposeLinks(null);
     try {
       const res = await fetch(`/api/splits/recording`, {
         method: "PATCH",
@@ -457,8 +457,7 @@ export default function Dashboard() {
         error?: string;
       };
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
-      const links = (j.acceptance_links ?? []).map((x) => `${x.email}: ${x.url}`).join("\n");
-      setProposeResult(links || "Proposto, mas nenhum link retornado.");
+      setProposeLinks(j.acceptance_links ?? []);
     } catch (e: unknown) {
       setSplitError(e instanceof Error ? e.message : "Erro ao propor split");
     }
@@ -850,10 +849,23 @@ export default function Dashboard() {
                 Propor (gerar links)
               </button>
             </div>
-            {proposeResult ? (
-              <pre className="mt-3 whitespace-pre-wrap rounded-md bg-black/30 p-3 text-[11px] text-slate-100 ring-1 ring-white/10">
-                {proposeResult}
-              </pre>
+            {proposeLinks ? (
+              <div className="mt-3 rounded-md bg-black/30 p-3 text-[11px] text-slate-100 ring-1 ring-white/10">
+                {proposeLinks.length === 0 ? (
+                  <div className="text-slate-300">Proposto, mas nenhum link retornado.</div>
+                ) : (
+                  <ul className="space-y-2">
+                    {proposeLinks.map((l) => (
+                      <li key={l.email} className="break-all">
+                        <div className="text-slate-300">{l.email}</div>
+                        <a href={l.url} target="_blank" rel="noreferrer" className="text-emerald-200 hover:underline">
+                          {l.url}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             ) : null}
           </div>
 
