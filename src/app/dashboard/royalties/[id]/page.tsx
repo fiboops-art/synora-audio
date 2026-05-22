@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabaseClient";
 
-export default function RoyaltyStatementDetail({ params }: { params: { id: string } }) {
+export default function RoyaltyStatementDetail() {
   const router = useRouter();
-  const id = params.id;
+  const params = useParams<{ id?: string }>();
+  const id = params?.id;
 
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,6 +64,11 @@ export default function RoyaltyStatementDetail({ params }: { params: { id: strin
     void (async () => {
       setLoading(true);
       setError(null);
+      if (!id) {
+        setError("Missing statement id");
+        setLoading(false);
+        return;
+      }
       try {
         const res = await fetch(`/api/royalties/statements/${encodeURIComponent(id)}?limit=500`, {
           headers: { authorization: `Bearer ${token}` },
