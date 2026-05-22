@@ -109,9 +109,10 @@ export default function Dashboard() {
 
   const usdFmt = useMemo(
     () =>
-      new Intl.NumberFormat("en-US", {
+      new Intl.NumberFormat("pt-BR", {
         style: "currency",
         currency: "USD",
+        currencyDisplay: "narrowSymbol",
         minimumFractionDigits: 2,
         maximumFractionDigits: 6,
       }),
