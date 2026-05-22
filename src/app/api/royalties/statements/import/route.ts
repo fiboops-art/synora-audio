@@ -100,6 +100,8 @@ export async function POST(req: Request) {
     const statement_id = crypto.randomUUID();
 
     const lineInserts: Array<Record<string, unknown>> = [];
+    const ledgerInserts: Array<Record<string, unknown>> = [];
+    const escrowInserts: Array<Record<string, unknown>> = [];
     const parsingErrors: string[] = [];
     let hasWarnings = false;
     let okLines = 0;
@@ -273,6 +275,34 @@ export async function POST(req: Request) {
         imported_at: importedAt,
         source,
       });
+
+      // Ledger + escrow (MVP): nothing disappears.
+      // - parsing_status error/quarantined => no ledger
+      // - matched => allocated ledger
+      // - unmatched/ambiguous => unallocated ledger + escrow(open)
+      if (parsing_status !== "error" && typeof net_amount_base === "number") {
+        const kind = status === "matched" ? "allocated" : status === "quarantined" ? null : "unallocated";
+        if (kind) {
+          ledgerInserts.push({
+            user_id: uid,
+            statement_id,
+            line_id,
+            kind,
+            amount_usd: net_amount_base,
+          });
+        }
+        if (status !== "matched" && status !== "quarantined") {
+          escrowInserts.push({
+            user_id: uid,
+            statement_id,
+            line_id,
+            amount_usd: net_amount_base,
+            resolution_status: "open",
+            best_confidence: match_confidence,
+            attempted_matches: match_confidence ? [{ recording_id, confidence: match_confidence, method: match_method }] : [],
+          });
+        }
+      }
     }
 
     const parsing_status = rows.length === 0 ? "failed" : hasWarnings ? "parsed_with_warnings" : "parsed";
@@ -299,6 +329,16 @@ export async function POST(req: Request) {
       if (lineErr) return NextResponse.json({ error: lineErr.message }, { status: 500 });
     }
 
+    if (ledgerInserts.length) {
+      const { error: ledErr } = await service.from("ledger_entries").insert(ledgerInserts);
+      if (ledErr) return NextResponse.json({ error: ledErr.message }, { status: 500 });
+    }
+
+    if (escrowInserts.length) {
+      const { error: escErr } = await service.from("escrow_buckets").insert(escrowInserts);
+      if (escErr) return NextResponse.json({ error: escErr.message }, { status: 500 });
+    }
+
     return NextResponse.json({
       statement: {
         id: statement_id,
@@ -309,6 +349,10 @@ export async function POST(req: Request) {
         file_hash,
         line_count: rows.length,
         ok_lines: okLines,
+      },
+      ledger: {
+        entries: ledgerInserts.length,
+        escrow_open: escrowInserts.length,
       },
     });
   } catch (e: unknown) {

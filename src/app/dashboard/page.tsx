@@ -38,6 +38,17 @@ export default function Dashboard() {
   const [creatingRec, setCreatingRec] = useState(false);
   const [recError, setRecError] = useState<string | null>(null);
 
+  const [overview, setOverview] = useState<
+    | {
+        total_in_usd: number;
+        allocated_usd: number;
+        unallocated_usd: number;
+        escrow_open_usd: number;
+        quarantine_count: number;
+      }
+    | null
+  >(null);
+
   const canImport = useMemo(() => csvText.trim().length > 0 && !!sessionToken, [csvText, sessionToken]);
 
   useEffect(() => {
@@ -87,6 +98,36 @@ export default function Dashboard() {
       await refreshStatements(sessionToken);
     })();
   }, [sessionToken, refreshStatements]);
+
+  const refreshOverview = useCallback(async (token: string) => {
+    try {
+      const res = await fetch(`/api/royalties/overview`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const j = (await res.json()) as {
+        totals?: {
+          total_in_usd: number;
+          allocated_usd: number;
+          unallocated_usd: number;
+          escrow_open_usd: number;
+          quarantine_count: number;
+        };
+        error?: string;
+      };
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setOverview(j.totals ?? null);
+    } catch (e: unknown) {
+      console.error(e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!sessionToken) return;
+    void (async () => {
+      await refreshOverview(sessionToken);
+    })();
+  }, [sessionToken, refreshOverview]);
 
   const refreshRecordings = useCallback(async (token: string) => {
     setLoadingRecordings(true);
@@ -212,6 +253,29 @@ export default function Dashboard() {
           <div className="text-xs text-slate-300">Distribuição</div>
           <div className="mt-1 text-2xl font-semibold text-white">Stub</div>
           <div className="mt-2 text-xs text-slate-300/80">Integração DSP fica para fase 2.</div>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-5">
+        <div className="syn-card p-4">
+          <div className="text-xs text-slate-300">Total in (USD)</div>
+          <div className="mt-1 text-lg font-semibold text-white">{overview ? overview.total_in_usd : "—"}</div>
+        </div>
+        <div className="syn-card p-4">
+          <div className="text-xs text-slate-300">Allocated (USD)</div>
+          <div className="mt-1 text-lg font-semibold text-white">{overview ? overview.allocated_usd : "—"}</div>
+        </div>
+        <div className="syn-card p-4">
+          <div className="text-xs text-slate-300">Unallocated (USD)</div>
+          <div className="mt-1 text-lg font-semibold text-white">{overview ? overview.unallocated_usd : "—"}</div>
+        </div>
+        <div className="syn-card p-4">
+          <div className="text-xs text-slate-300">Escrow open (USD)</div>
+          <div className="mt-1 text-lg font-semibold text-white">{overview ? overview.escrow_open_usd : "—"}</div>
+        </div>
+        <div className="syn-card p-4">
+          <div className="text-xs text-slate-300">Quarantine</div>
+          <div className="mt-1 text-lg font-semibold text-white">{overview ? overview.quarantine_count : "—"}</div>
         </div>
       </div>
 
