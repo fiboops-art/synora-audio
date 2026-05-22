@@ -184,6 +184,14 @@ export async function PATCH(req: Request) {
     const effectiveBase = baseUrl || "";
 
     if (action === "propose") {
+      // Invalidate previous pending acceptances for this split (avoid link confusion)
+      await service
+        .from("recording_split_acceptances")
+        .update({ status: "expired" })
+        .eq("user_id", uid)
+        .eq("split_id", split_id)
+        .eq("status", "pending");
+
       // Validate parties have email
       const partyIds = Array.from(new Set(itemRows.map((x) => x.party_id)));
       const { data: parties, error: pErr } = await service
