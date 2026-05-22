@@ -83,6 +83,8 @@ export default function Dashboard() {
   const [splitError, setSplitError] = useState<string | null>(null);
   const [savingSplit, setSavingSplit] = useState(false);
   const [splitSuccess, setSplitSuccess] = useState<string | null>(null);
+  const [loadingSplit, setLoadingSplit] = useState(false);
+  const [loadedSplitInfo, setLoadedSplitInfo] = useState<string | null>(null);
 
   const canImport = useMemo(() => csvText.trim().length > 0 && !!sessionToken, [csvText, sessionToken]);
 
@@ -369,6 +371,44 @@ export default function Dashboard() {
     }
   }
 
+  const loadSplitForRecording = useCallback(
+    async (token: string, recordingId: string) => {
+      setLoadingSplit(true);
+      setLoadedSplitInfo(null);
+      setSplitError(null);
+      try {
+        const res = await fetch(`/api/splits/recording?recording_id=${encodeURIComponent(recordingId)}`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const j = (await res.json()) as {
+          latest_split?: { id: string; version: number; status: string } | null;
+          items?: Array<{ party_id: string; role: string; share_bps: number } & { party?: { display_name?: string } | null }>;
+          error?: string;
+        };
+        if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+
+        const items = (j.items ?? []).map((it) => ({
+          party_id: String(it.party_id ?? ""),
+          role: String(it.role ?? "participant"),
+          share_bps: Math.trunc(Number(it.share_bps ?? 0)),
+        }));
+        setSplitItems(items);
+
+        if (j.latest_split?.id) {
+          setLoadedSplitInfo(`Split carregado: v${j.latest_split.version} (${j.latest_split.status})`);
+        } else {
+          setLoadedSplitInfo("Nenhum split salvo ainda para este recording.");
+        }
+      } catch (e: unknown) {
+        setSplitError(e instanceof Error ? e.message : "Erro ao carregar split");
+      } finally {
+        setLoadingSplit(false);
+      }
+    },
+    []
+  );
+
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-8">
       <div className="flex items-center justify-between">
@@ -649,6 +689,11 @@ export default function Dashboard() {
               onChange={(e) => {
                 setSplitRecordingId(e.target.value);
                 setSplitItems([]);
+                setLoadedSplitInfo(null);
+                setSplitSuccess(null);
+                setSplitError(null);
+                const rid = e.target.value;
+                if (sessionToken && rid) void loadSplitForRecording(sessionToken, rid);
               }}
               className="syn-select mt-2 w-full px-3"
             >
@@ -661,6 +706,9 @@ export default function Dashboard() {
             </select>
 
             <div className="mt-4 text-xs text-slate-300">Items</div>
+            {loadedSplitInfo ? (
+              <div className="mt-2 text-xs text-slate-200/90">{loadingSplit ? "Carregando split…" : loadedSplitInfo}</div>
+            ) : null}
             <div className="mt-2 grid gap-2">
               {splitItems.map((it, idx) => (
                 <div key={idx} className="grid gap-2 sm:grid-cols-[1fr_1fr_120px_auto]">
