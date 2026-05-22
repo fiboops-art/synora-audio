@@ -49,6 +49,29 @@ export default function Dashboard() {
     | null
   >(null);
 
+  const [escrow, setEscrow] = useState<
+    Array<{
+      id: string;
+      amount_usd: number;
+      resolution_status: string;
+      created_at: string;
+      line: {
+        id: string;
+        isrc: string | null;
+        track_title: string | null;
+        artist_name: string | null;
+        dsp: string | null;
+        territory: string | null;
+        status: string;
+        recording_id: string | null;
+      } | null;
+    }>
+  >([]);
+  const [loadingEscrow, setLoadingEscrow] = useState(false);
+  const [escrowError, setEscrowError] = useState<string | null>(null);
+  const [resolvingEscrowId, setResolvingEscrowId] = useState<string | null>(null);
+  const [resolveRecordingId, setResolveRecordingId] = useState<string>("");
+
   const canImport = useMemo(() => csvText.trim().length > 0 && !!sessionToken, [csvText, sessionToken]);
 
   useEffect(() => {
@@ -122,12 +145,37 @@ export default function Dashboard() {
     }
   }, []);
 
+  const refreshEscrow = useCallback(async (token: string) => {
+    setLoadingEscrow(true);
+    setEscrowError(null);
+    try {
+      const res = await fetch(`/api/escrow?status=open&limit=50`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const j = (await res.json()) as { escrow?: typeof escrow; error?: string };
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setEscrow(j.escrow ?? []);
+    } catch (e: unknown) {
+      setEscrowError(e instanceof Error ? e.message : "Erro ao carregar escrow");
+    } finally {
+      setLoadingEscrow(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!sessionToken) return;
     void (async () => {
       await refreshOverview(sessionToken);
     })();
   }, [sessionToken, refreshOverview]);
+
+  useEffect(() => {
+    if (!sessionToken) return;
+    void (async () => {
+      await refreshEscrow(sessionToken);
+    })();
+  }, [sessionToken, refreshEscrow]);
 
   const refreshRecordings = useCallback(async (token: string) => {
     setLoadingRecordings(true);
@@ -209,10 +257,31 @@ export default function Dashboard() {
       if (!res.ok) throw new Error(j?.error || `HTTP ${res.status}`);
       setImportResult(JSON.stringify(j, null, 2));
       await refreshStatements(sessionToken);
+      await refreshOverview(sessionToken);
+      await refreshEscrow(sessionToken);
     } catch (e: unknown) {
       setImportError(e instanceof Error ? e.message : "Erro ao importar");
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function resolveEscrow() {
+    if (!sessionToken || !resolvingEscrowId) return;
+    try {
+      const res = await fetch(`/api/escrow/resolve`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${sessionToken}` },
+        body: JSON.stringify({ escrow_id: resolvingEscrowId, recording_id: resolveRecordingId }),
+      });
+      const j = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setResolvingEscrowId(null);
+      setResolveRecordingId("");
+      await refreshEscrow(sessionToken);
+      await refreshOverview(sessionToken);
+    } catch (e: unknown) {
+      setEscrowError(e instanceof Error ? e.message : "Erro ao resolver escrow");
     }
   }
 
@@ -415,6 +484,109 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="mt-6 syn-card p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-white">Escrow (Unallocated) — Open</div>
+            <div className="text-sm text-slate-200/90">Dinheiro pendente de matching (nada some; nada paga errado).</div>
+          </div>
+          <button
+            onClick={() => sessionToken && void refreshEscrow(sessionToken)}
+            className="text-xs text-slate-200 hover:text-white"
+          >
+            {loadingEscrow ? "Atualizando..." : "Atualizar"}
+          </button>
+        </div>
+
+        {escrowError ? <div className="mt-3 text-xs text-red-200">{escrowError}</div> : null}
+
+        <div className="mt-3 overflow-hidden rounded-md ring-1 ring-white/10">
+          <table className="w-full text-left text-xs text-slate-200/90">
+            <thead className="bg-white/5 text-slate-200">
+              <tr>
+                <th className="px-3 py-2">USD</th>
+                <th className="px-3 py-2">ISRC</th>
+                <th className="px-3 py-2">Track</th>
+                <th className="px-3 py-2">DSP</th>
+                <th className="px-3 py-2">Terr</th>
+                <th className="px-3 py-2">Ação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {escrow.length === 0 ? (
+                <tr>
+                  <td className="px-3 py-3 text-slate-300" colSpan={6}>
+                    Nenhum item em escrow aberto.
+                  </td>
+                </tr>
+              ) : (
+                escrow.map((e) => (
+                  <tr key={e.id} className="border-t border-white/10">
+                    <td className="px-3 py-2 text-slate-100">{e.amount_usd}</td>
+                    <td className="px-3 py-2 text-slate-300">{e.line?.isrc ?? "—"}</td>
+                    <td className="px-3 py-2">
+                      <div className="text-slate-100">{e.line?.track_title ?? "—"}</div>
+                      <div className="text-slate-300">{e.line?.artist_name ?? ""}</div>
+                    </td>
+                    <td className="px-3 py-2 text-slate-300">{e.line?.dsp ?? "—"}</td>
+                    <td className="px-3 py-2 text-slate-300">{e.line?.territory ?? "—"}</td>
+                    <td className="px-3 py-2">
+                      <button
+                        onClick={() => {
+                          setResolvingEscrowId(e.id);
+                          setResolveRecordingId("");
+                        }}
+                        className="rounded-md bg-white/10 px-3 py-1.5 text-xs text-slate-100 ring-1 ring-white/10 hover:bg-white/15"
+                      >
+                        Resolver
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {resolvingEscrowId ? (
+          <div className="mt-4 rounded-md bg-black/30 p-4 ring-1 ring-white/10">
+            <div className="text-xs text-slate-300">Resolver escrow: {resolvingEscrowId}</div>
+            <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+              <select
+                value={resolveRecordingId}
+                onChange={(e) => setResolveRecordingId(e.target.value)}
+                className="rounded-md bg-white/10 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10"
+              >
+                <option value="">Selecione um Recording</option>
+                {recordings.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {(r.isrc ?? "—") + " — " + (r.track_title ?? "") + " — " + (r.artist_name ?? "")}
+                  </option>
+                ))}
+              </select>
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={!resolveRecordingId}
+                  onClick={() => void resolveEscrow()}
+                  className="rounded-md bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-50"
+                >
+                  Confirmar
+                </button>
+                <button
+                  onClick={() => setResolvingEscrowId(null)}
+                  className="rounded-md bg-white/10 px-4 py-2 text-sm text-slate-100 ring-1 ring-white/10"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+            <div className="mt-2 text-xs text-slate-300/80">
+              Isso marca a linha como <b>matched</b>, resolve o escrow e troca o ledger de <b>unallocated</b> para <b>allocated</b>.
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-6 syn-card p-6">
