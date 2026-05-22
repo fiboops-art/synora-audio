@@ -86,6 +86,8 @@ export default function Dashboard() {
   const [splitSuccess, setSplitSuccess] = useState<string | null>(null);
   const [loadingSplit, setLoadingSplit] = useState(false);
   const [loadedSplitInfo, setLoadedSplitInfo] = useState<string | null>(null);
+  const [loadedSplitId, setLoadedSplitId] = useState<string | null>(null);
+  const [proposeResult, setProposeResult] = useState<string | null>(null);
 
   const partiesWithEmail = useMemo(
     () => parties.filter((p) => (p.email ?? "").trim().length > 0),
@@ -385,6 +387,8 @@ export default function Dashboard() {
     async (token: string, recordingId: string) => {
       setLoadingSplit(true);
       setLoadedSplitInfo(null);
+      setLoadedSplitId(null);
+      setProposeResult(null);
       setSplitError(null);
       try {
         const res = await fetch(`/api/splits/recording?recording_id=${encodeURIComponent(recordingId)}`, {
@@ -406,6 +410,7 @@ export default function Dashboard() {
         setSplitItems(items);
 
         if (j.latest_split?.id) {
+          setLoadedSplitId(j.latest_split.id);
           setLoadedSplitInfo(`Split carregado: v${j.latest_split.version} (${j.latest_split.status})`);
         } else {
           setLoadedSplitInfo("Nenhum split salvo ainda para este recording.");
@@ -418,6 +423,37 @@ export default function Dashboard() {
     },
     []
   );
+
+  async function proposeSplit() {
+    if (!sessionToken) return;
+    if (!loadedSplitId) {
+      setSplitError("Nenhum split carregado para propor. Salve um draft primeiro.");
+      return;
+    }
+    setSplitError(null);
+    setProposeResult(null);
+    try {
+      const res = await fetch(`/api/splits/recording`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json", authorization: `Bearer ${sessionToken}` },
+        body: JSON.stringify({
+          action: "propose",
+          split_id: loadedSplitId,
+          base_url: typeof window !== "undefined" ? window.location.origin : undefined,
+        }),
+      });
+      const j = (await res.json()) as {
+        ok?: boolean;
+        acceptance_links?: Array<{ email: string; url: string }>;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      const links = (j.acceptance_links ?? []).map((x) => `${x.email}: ${x.url}`).join("\n");
+      setProposeResult(links || "Proposto, mas nenhum link retornado.");
+    } catch (e: unknown) {
+      setSplitError(e instanceof Error ? e.message : "Erro ao propor split");
+    }
+  }
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-8">
@@ -729,6 +765,9 @@ export default function Dashboard() {
             {loadedSplitInfo ? (
               <div className="mt-2 text-xs text-slate-200/90">{loadingSplit ? "Carregando split…" : loadedSplitInfo}</div>
             ) : null}
+            {loadedSplitId ? (
+              <div className="mt-1 text-[11px] text-slate-300">split_id: {loadedSplitId}</div>
+            ) : null}
             <div className="mt-2 grid gap-2">
               {splitItems.map((it, idx) => (
                 <div key={idx} className="grid gap-2 sm:grid-cols-[1fr_1fr_120px_auto]">
@@ -794,7 +833,19 @@ export default function Dashboard() {
               >
                 {savingSplit ? "Salvando..." : "Salvar draft"}
               </button>
+              <button
+                disabled={!loadedSplitId}
+                onClick={() => void proposeSplit()}
+                className="ml-2 rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                Propor (gerar links)
+              </button>
             </div>
+            {proposeResult ? (
+              <pre className="mt-3 whitespace-pre-wrap rounded-md bg-black/30 p-3 text-[11px] text-slate-100 ring-1 ring-white/10">
+                {proposeResult}
+              </pre>
+            ) : null}
           </div>
 
           <div className="rounded-md bg-black/30 p-4 ring-1 ring-white/10">
