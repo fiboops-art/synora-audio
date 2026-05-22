@@ -107,6 +107,17 @@ export default function Dashboard() {
 
   const canImport = useMemo(() => csvText.trim().length > 0 && !!sessionToken, [csvText, sessionToken]);
 
+  const usdFmt = useMemo(
+    () =>
+      new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 6,
+      }),
+    []
+  );
+
   useEffect(() => {
     (async () => {
       const supabase = getSupabase();
@@ -638,7 +649,7 @@ export default function Dashboard() {
         ) : (
           <div className="mt-3">
             <div className="text-xs text-slate-300">
-              Total: {partyBalancesTotal === null ? "—" : partyBalancesTotal}
+              Total: {partyBalancesTotal === null ? "—" : usdFmt.format(partyBalancesTotal)}
             </div>
             <div className="mt-3 grid gap-2">
               {partyBalances.length === 0 ? (
@@ -650,7 +661,7 @@ export default function Dashboard() {
                       <div className="truncate text-sm font-semibold text-white">{b.display_name}</div>
                       <div className="truncate text-xs text-slate-300">{b.email ?? b.party_id}</div>
                     </div>
-                    <div className="ml-4 text-sm font-semibold text-emerald-200">{b.balance_usd}</div>
+                    <div className="ml-4 text-sm font-semibold text-emerald-200">{usdFmt.format(b.balance_usd)}</div>
                   </div>
                 ))
               )}

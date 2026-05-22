@@ -24,15 +24,15 @@ export async function GET(req: Request) {
 
     const { data, error } = await service
       .from("party_ledger_entries")
-      .select("party_id, amount_usd, parties:party_id(id,display_name,email)")
+      // Embed party info (FK: party_ledger_entries.party_id -> parties.id)
+      .select("party_id, amount_usd, party:parties(id,display_name,email)")
       .eq("user_id", uid);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    // Supabase returns nested join as array by default
     const rows = (data ?? []) as unknown as Array<{
       party_id: string;
       amount_usd: number;
-      parties?: Array<{ id: string; display_name: string; email: string | null }> | null;
+      party?: { id: string; display_name: string; email: string | null } | null;
     }>;
 
     const map = new Map<
@@ -42,7 +42,7 @@ export async function GET(req: Request) {
 
     for (const r of rows) {
       const pid = String(r.party_id);
-      const p = (r.parties && r.parties[0]) ? r.parties[0] : null;
+      const p = r.party ?? null;
       const cur = map.get(pid) ?? {
         party_id: pid,
         display_name: p?.display_name ?? pid,
