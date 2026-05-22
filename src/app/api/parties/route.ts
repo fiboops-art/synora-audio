@@ -27,7 +27,7 @@ export async function GET(req: Request) {
 
     const { data, error } = await service
       .from("parties")
-      .select("id,display_name,kind,created_at")
+      .select("id,display_name,kind,email,created_at")
       .eq("user_id", uid)
       .order("created_at", { ascending: false })
       .limit(limit);
@@ -45,10 +45,16 @@ export async function POST(req: Request) {
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
     if (!token) return NextResponse.json({ error: "Missing Authorization" }, { status: 401 });
 
-    const body = (await req.json()) as { display_name?: string; kind?: "person" | "company" };
+    const body = (await req.json()) as {
+      display_name?: string;
+      kind?: "person" | "company";
+      email?: string;
+    };
     const display_name = (body.display_name ?? "").trim();
     const kind = (body.kind ?? "person") as "person" | "company";
+    const email = (body.email ?? "").trim().toLowerCase();
     if (!display_name) return NextResponse.json({ error: "Missing display_name" }, { status: 400 });
+    if (!email) return NextResponse.json({ error: "Missing email" }, { status: 400 });
 
     const service = getSupabaseService();
     const { data: userData, error: userErr } = await service.auth.getUser(token);
@@ -57,8 +63,8 @@ export async function POST(req: Request) {
 
     const { data, error } = await service
       .from("parties")
-      .insert({ user_id: uid, display_name, kind })
-      .select("id,display_name,kind,created_at")
+      .insert({ user_id: uid, display_name, kind, email })
+      .select("id,display_name,kind,email,created_at")
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -67,4 +73,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: errMsg(e) }, { status: 500 });
   }
 }
-

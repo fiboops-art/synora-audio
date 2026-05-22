@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseService } from "@/lib/supabaseServer";
+import crypto from "crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,6 +10,10 @@ function errMsg(e: unknown): string {
     return (e as { message: string }).message;
   }
   return "Unknown error";
+}
+
+function sha256Hex(input: string): string {
+  return crypto.createHash("sha256").update(input).digest("hex");
 }
 
 export async function GET(req: Request) {
@@ -131,6 +136,148 @@ export async function POST(req: Request) {
     if (itErr) return NextResponse.json({ error: itErr.message }, { status: 500 });
 
     return NextResponse.json({ split });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: errMsg(e) }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: Request) {
+  // Split lifecycle: propose / activate
+  try {
+    const auth = req.headers.get("authorization") || "";
+    const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+    if (!token) return NextResponse.json({ error: "Missing Authorization" }, { status: 401 });
+
+    const body = (await req.json()) as {
+      action?: "propose" | "activate";
+      split_id?: string;
+      base_url?: string; // optional override for links
+    };
+    const action = body.action;
+    const split_id = (body.split_id ?? "").trim();
+    if (!action) return NextResponse.json({ error: "Missing action" }, { status: 400 });
+    if (!split_id) return NextResponse.json({ error: "Missing split_id" }, { status: 400 });
+
+    const service = getSupabaseService();
+    const { data: userData, error: userErr } = await service.auth.getUser(token);
+    if (userErr || !userData.user) return NextResponse.json({ error: "Invalid session" }, { status: 401 });
+    const uid = userData.user.id;
+
+    // Load split + items
+    const { data: split, error: sErr } = await service
+      .from("recording_splits")
+      .select("id,recording_id,version,status")
+      .eq("id", split_id)
+      .eq("user_id", uid)
+      .single();
+    if (sErr || !split) return NextResponse.json({ error: sErr?.message ?? "Split not found" }, { status: 404 });
+
+    const { data: items, error: itErr } = await service
+      .from("recording_split_items")
+      .select("party_id,share_bps,role")
+      .eq("split_id", split_id)
+      .eq("user_id", uid);
+    if (itErr) return NextResponse.json({ error: itErr.message }, { status: 500 });
+    const itemRows = (items ?? []) as Array<{ party_id: string; share_bps: number; role: string }>;
+
+    const baseUrl = (body.base_url ?? process.env.NEXT_PUBLIC_APP_URL ?? "").trim();
+    const effectiveBase = baseUrl || "";
+
+    if (action === "propose") {
+      // Validate parties have email
+      const partyIds = Array.from(new Set(itemRows.map((x) => x.party_id)));
+      const { data: parties, error: pErr } = await service
+        .from("parties")
+        .select("id,email,display_name")
+        .eq("user_id", uid)
+        .in("id", partyIds);
+      if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
+      const partiesById = new Map<string, { email: string; display_name: string }>();
+      for (const p of (parties ?? []) as Array<{ id: string; email: string | null; display_name: string }>) {
+        partiesById.set(p.id, { email: (p.email ?? "").toLowerCase(), display_name: p.display_name });
+      }
+      for (const pid of partyIds) {
+        const pe = partiesById.get(pid);
+        if (!pe?.email) {
+          return NextResponse.json({ error: `Party missing email: ${pid}` }, { status: 400 });
+        }
+      }
+
+      // Create acceptances (pending) with tokens
+      const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 72).toISOString(); // 72h
+      const acceptanceLinks: Array<{ party_id: string; email: string; token: string; url: string }> = [];
+      const acceptanceInserts: Array<Record<string, unknown>> = [];
+
+      for (const pid of partyIds) {
+        const tokenPlain = crypto.randomUUID();
+        const token_hash = sha256Hex(tokenPlain);
+        const email = partiesById.get(pid)!.email;
+        acceptanceInserts.push({
+          user_id: uid,
+          split_id,
+          party_id: pid,
+          email,
+          token_hash,
+          status: "pending",
+          expires_at: expiresAt,
+        });
+        const url = effectiveBase ? `${effectiveBase.replace(/\/$/, "")}/accept/split/${tokenPlain}` : `/accept/split/${tokenPlain}`;
+        acceptanceLinks.push({ party_id: pid, email, token: tokenPlain, url });
+      }
+
+      const { error: aErr } = await service.from("recording_split_acceptances").insert(acceptanceInserts);
+      if (aErr) return NextResponse.json({ error: aErr.message }, { status: 500 });
+
+      const { error: updErr } = await service
+        .from("recording_splits")
+        .update({ status: "proposed" })
+        .eq("id", split_id)
+        .eq("user_id", uid);
+      if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
+
+      return NextResponse.json({ ok: true, status: "proposed", acceptance_links: acceptanceLinks });
+    }
+
+    if (action === "activate") {
+      // Check all acceptances accepted
+      const { data: acc, error: accErr } = await service
+        .from("recording_split_acceptances")
+        .select("status")
+        .eq("user_id", uid)
+        .eq("split_id", split_id);
+      if (accErr) return NextResponse.json({ error: accErr.message }, { status: 500 });
+      const rows = (acc ?? []) as Array<{ status: string }>;
+      if (rows.length === 0) {
+        return NextResponse.json({ error: "No acceptances found. Propose first." }, { status: 400 });
+      }
+      const pending = rows.filter((r) => r.status !== "accepted").length;
+      if (pending > 0) {
+        return NextResponse.json({ error: `Cannot activate: ${pending} acceptances not accepted` }, { status: 400 });
+      }
+
+      // Supersede previous active splits for this recording
+      const recording_id = String((split as unknown as { recording_id?: unknown }).recording_id ?? "");
+      if (recording_id) {
+        await service
+          .from("recording_splits")
+          .update({ status: "superseded" })
+          .eq("user_id", uid)
+          .eq("recording_id", recording_id)
+          .eq("status", "active")
+          .neq("id", split_id);
+      }
+
+      const { error: actErr } = await service
+        .from("recording_splits")
+        .update({ status: "active" })
+        .eq("id", split_id)
+        .eq("user_id", uid);
+      if (actErr) return NextResponse.json({ error: actErr.message }, { status: 500 });
+
+      return NextResponse.json({ ok: true, status: "active" });
+    }
+
+    return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (e: unknown) {
     return NextResponse.json({ error: errMsg(e) }, { status: 500 });
   }
