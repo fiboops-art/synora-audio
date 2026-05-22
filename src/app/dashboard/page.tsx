@@ -28,6 +28,16 @@ export default function Dashboard() {
   const [importResult, setImportResult] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
 
+  const [recordings, setRecordings] = useState<
+    Array<{ id: string; isrc: string | null; track_title: string | null; artist_name: string | null; created_at: string }>
+  >([]);
+  const [loadingRecordings, setLoadingRecordings] = useState(false);
+  const [recIsrc, setRecIsrc] = useState("BR-ABC-26-00001");
+  const [recTitle, setRecTitle] = useState("Minha Faixa");
+  const [recArtist, setRecArtist] = useState("Claudio");
+  const [creatingRec, setCreatingRec] = useState(false);
+  const [recError, setRecError] = useState<string | null>(null);
+
   const canImport = useMemo(() => csvText.trim().length > 0 && !!sessionToken, [csvText, sessionToken]);
 
   useEffect(() => {
@@ -77,6 +87,57 @@ export default function Dashboard() {
       await refreshStatements(sessionToken);
     })();
   }, [sessionToken, refreshStatements]);
+
+  const refreshRecordings = useCallback(async (token: string) => {
+    setLoadingRecordings(true);
+    setRecError(null);
+    try {
+      const res = await fetch(`/api/catalog/recordings?limit=50`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const j = (await res.json()) as {
+        recordings?: Array<{ id: string; isrc: string | null; track_title: string | null; artist_name: string | null; created_at: string }>;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setRecordings(j.recordings ?? []);
+    } catch (e: unknown) {
+      setRecError(e instanceof Error ? e.message : "Erro ao listar recordings");
+    } finally {
+      setLoadingRecordings(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!sessionToken) return;
+    void (async () => {
+      await refreshRecordings(sessionToken);
+    })();
+  }, [sessionToken, refreshRecordings]);
+
+  async function createRecording() {
+    if (!sessionToken) return;
+    setCreatingRec(true);
+    setRecError(null);
+    try {
+      const res = await fetch(`/api/catalog/recordings`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify({ isrc: recIsrc, track_title: recTitle, artist_name: recArtist }),
+      });
+      const j = (await res.json()) as { recording?: unknown; error?: string };
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      await refreshRecordings(sessionToken);
+    } catch (e: unknown) {
+      setRecError(e instanceof Error ? e.message : "Erro ao criar recording");
+    } finally {
+      setCreatingRec(false);
+    }
+  }
 
   async function onPickCsvFile(file: File) {
     const text = await file.text();
@@ -287,6 +348,91 @@ export default function Dashboard() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 syn-card p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-white">Catalog (MVP) — Recordings (Master)</div>
+            <div className="text-sm text-slate-200/90">Registry mínimo pra matching ISRC exact.</div>
+          </div>
+          <button
+            onClick={() => sessionToken && void refreshRecordings(sessionToken)}
+            className="text-xs text-slate-200 hover:text-white"
+          >
+            {loadingRecordings ? "Atualizando..." : "Atualizar"}
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-md bg-black/30 p-4 ring-1 ring-white/10">
+            <div className="text-xs text-slate-300">Criar Recording</div>
+            <div className="mt-3 grid gap-2">
+              <input
+                value={recIsrc}
+                onChange={(e) => setRecIsrc(e.target.value)}
+                placeholder="ISRC"
+                className="rounded-md bg-white/10 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10"
+              />
+              <input
+                value={recTitle}
+                onChange={(e) => setRecTitle(e.target.value)}
+                placeholder="Track title"
+                className="rounded-md bg-white/10 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10"
+              />
+              <input
+                value={recArtist}
+                onChange={(e) => setRecArtist(e.target.value)}
+                placeholder="Artist"
+                className="rounded-md bg-white/10 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10"
+              />
+              <button
+                disabled={!sessionToken || creatingRec}
+                onClick={() => void createRecording()}
+                className="rounded-md bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-50"
+              >
+                {creatingRec ? "Criando..." : "Criar"}
+              </button>
+              {recError ? (
+                <div className="text-xs text-red-200">{recError}</div>
+              ) : (
+                <div className="text-xs text-slate-300/80">Dica: cria o Recording com o ISRC do CSV e reimporte royalties.</div>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs text-slate-300">Recordings recentes</div>
+            <div className="mt-2 overflow-hidden rounded-md ring-1 ring-white/10">
+              <table className="w-full text-left text-xs text-slate-200/90">
+                <thead className="bg-white/5 text-slate-200">
+                  <tr>
+                    <th className="px-3 py-2">ISRC</th>
+                    <th className="px-3 py-2">Track</th>
+                    <th className="px-3 py-2">Artist</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recordings.length === 0 ? (
+                    <tr>
+                      <td className="px-3 py-3 text-slate-300" colSpan={3}>
+                        Nenhum recording ainda.
+                      </td>
+                    </tr>
+                  ) : (
+                    recordings.map((r) => (
+                      <tr key={r.id} className="border-t border-white/10">
+                        <td className="px-3 py-2 text-slate-300">{r.isrc ?? "—"}</td>
+                        <td className="px-3 py-2 text-slate-100">{r.track_title ?? "—"}</td>
+                        <td className="px-3 py-2 text-slate-300">{r.artist_name ?? "—"}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
