@@ -114,7 +114,7 @@ export default function Dashboard() {
         currency: "USD",
         currencyDisplay: "narrowSymbol",
         minimumFractionDigits: 2,
-        maximumFractionDigits: 6,
+        maximumFractionDigits: 2,
       }),
     []
   );
