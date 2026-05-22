@@ -72,6 +72,17 @@ export default function Dashboard() {
   const [resolvingEscrowId, setResolvingEscrowId] = useState<string | null>(null);
   const [resolveRecordingId, setResolveRecordingId] = useState<string>("");
 
+  const [parties, setParties] = useState<Array<{ id: string; display_name: string; kind: string }>>([]);
+  const [newPartyName, setNewPartyName] = useState("");
+  const [newPartyKind, setNewPartyKind] = useState<"person" | "company">("person");
+  const [partyError, setPartyError] = useState<string | null>(null);
+  const [creatingParty, setCreatingParty] = useState(false);
+
+  const [splitRecordingId, setSplitRecordingId] = useState<string>("");
+  const [splitItems, setSplitItems] = useState<Array<{ party_id: string; role: string; share_bps: number }>>([]);
+  const [splitError, setSplitError] = useState<string | null>(null);
+  const [savingSplit, setSavingSplit] = useState(false);
+
   const canImport = useMemo(() => csvText.trim().length > 0 && !!sessionToken, [csvText, sessionToken]);
 
   useEffect(() => {
@@ -163,6 +174,21 @@ export default function Dashboard() {
     }
   }, []);
 
+  const refreshParties = useCallback(async (token: string) => {
+    setPartyError(null);
+    try {
+      const res = await fetch(`/api/parties?limit=200`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const j = (await res.json()) as { parties?: Array<{ id: string; display_name: string; kind: string }>; error?: string };
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setParties(j.parties ?? []);
+    } catch (e: unknown) {
+      setPartyError(e instanceof Error ? e.message : "Erro ao carregar parties");
+    }
+  }, []);
+
   useEffect(() => {
     if (!sessionToken) return;
     void (async () => {
@@ -176,6 +202,13 @@ export default function Dashboard() {
       await refreshEscrow(sessionToken);
     })();
   }, [sessionToken, refreshEscrow]);
+
+  useEffect(() => {
+    if (!sessionToken) return;
+    void (async () => {
+      await refreshParties(sessionToken);
+    })();
+  }, [sessionToken, refreshParties]);
 
   const refreshRecordings = useCallback(async (token: string) => {
     setLoadingRecordings(true);
@@ -282,6 +315,54 @@ export default function Dashboard() {
       await refreshOverview(sessionToken);
     } catch (e: unknown) {
       setEscrowError(e instanceof Error ? e.message : "Erro ao resolver escrow");
+    }
+  }
+
+  async function createParty() {
+    if (!sessionToken) return;
+    setCreatingParty(true);
+    setPartyError(null);
+    try {
+      const res = await fetch(`/api/parties`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${sessionToken}` },
+        body: JSON.stringify({ display_name: newPartyName, kind: newPartyKind }),
+      });
+      const j = (await res.json()) as { party?: unknown; error?: string };
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setNewPartyName("");
+      await refreshParties(sessionToken);
+    } catch (e: unknown) {
+      setPartyError(e instanceof Error ? e.message : "Erro ao criar party");
+    } finally {
+      setCreatingParty(false);
+    }
+  }
+
+  function splitTotalBps() {
+    return splitItems.reduce((acc, it) => acc + Number(it.share_bps ?? 0), 0);
+  }
+
+  async function saveSplitDraft() {
+    if (!sessionToken) return;
+    setSavingSplit(true);
+    setSplitError(null);
+    try {
+      if (!splitRecordingId) throw new Error("Selecione um Recording");
+      const total = splitTotalBps();
+      if (total !== 10000) throw new Error(`Splits devem somar 10000 bps (agora: ${total})`);
+
+      const res = await fetch(`/api/splits/recording`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${sessionToken}` },
+        body: JSON.stringify({ recording_id: splitRecordingId, items: splitItems }),
+      });
+      const j = (await res.json()) as { split?: unknown; error?: string };
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+    } catch (e: unknown) {
+      setSplitError(e instanceof Error ? e.message : "Erro ao salvar split");
+    } finally {
+      setSavingSplit(false);
     }
   }
 
@@ -482,6 +563,175 @@ export default function Dashboard() {
                 </table>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 syn-card p-6">
+        <div className="text-sm font-semibold text-white">Rights (MVP) — Parties</div>
+        <div className="mt-1 text-sm text-slate-200/90">Quem recebe (autores, produtores, intérpretes, selo…).</div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-md bg-black/30 p-4 ring-1 ring-white/10">
+            <div className="text-xs text-slate-300">Criar Party</div>
+            <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+              <input
+                value={newPartyName}
+                onChange={(e) => setNewPartyName(e.target.value)}
+                placeholder="Nome (ex: Claudio, Produtor X, Label Y)"
+                className="rounded-md bg-white/10 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10"
+              />
+              <select
+                value={newPartyKind}
+                onChange={(e) => setNewPartyKind(e.target.value as "person" | "company")}
+                className="syn-select"
+              >
+                <option value="person">person</option>
+                <option value="company">company</option>
+              </select>
+            </div>
+            <div className="mt-2">
+              <button
+                disabled={!newPartyName.trim() || creatingParty}
+                onClick={() => void createParty()}
+                className="rounded-md bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-50"
+              >
+                {creatingParty ? "Criando..." : "Criar"}
+              </button>
+            </div>
+            {partyError ? <div className="mt-2 text-xs text-red-200">{partyError}</div> : null}
+          </div>
+
+          <div>
+            <div className="text-xs text-slate-300">Parties recentes</div>
+            <div className="mt-2 overflow-hidden rounded-md ring-1 ring-white/10">
+              <table className="w-full text-left text-xs text-slate-200/90">
+                <thead className="bg-white/5 text-slate-200">
+                  <tr>
+                    <th className="px-3 py-2">Nome</th>
+                    <th className="px-3 py-2">Tipo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parties.length === 0 ? (
+                    <tr>
+                      <td className="px-3 py-3 text-slate-300" colSpan={2}>
+                        Nenhuma party ainda.
+                      </td>
+                    </tr>
+                  ) : (
+                    parties.slice(0, 10).map((p) => (
+                      <tr key={p.id} className="border-t border-white/10">
+                        <td className="px-3 py-2 text-slate-100">{p.display_name}</td>
+                        <td className="px-3 py-2 text-slate-300">{p.kind}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 syn-card p-6">
+        <div className="text-sm font-semibold text-white">Rights (MVP) — Recording Splits (draft)</div>
+        <div className="mt-1 text-sm text-slate-200/90">Define como o Master será distribuído (bps = 10000 = 100%).</div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-md bg-black/30 p-4 ring-1 ring-white/10">
+            <div className="text-xs text-slate-300">Selecionar Recording</div>
+            <select
+              value={splitRecordingId}
+              onChange={(e) => {
+                setSplitRecordingId(e.target.value);
+                setSplitItems([]);
+              }}
+              className="syn-select mt-2 w-full px-3"
+            >
+              <option value="">Selecione…</option>
+              {recordings.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {(r.isrc ?? "—") + " — " + (r.track_title ?? "") + " — " + (r.artist_name ?? "")}
+                </option>
+              ))}
+            </select>
+
+            <div className="mt-4 text-xs text-slate-300">Items</div>
+            <div className="mt-2 grid gap-2">
+              {splitItems.map((it, idx) => (
+                <div key={idx} className="grid gap-2 sm:grid-cols-[1fr_1fr_120px_auto]">
+                  <select
+                    value={it.party_id}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setSplitItems((s) => s.map((x, i) => (i === idx ? { ...x, party_id: v } : x)));
+                    }}
+                    className="syn-select w-full px-3"
+                  >
+                    <option value="">Party…</option>
+                    {parties.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.display_name}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    value={it.role}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setSplitItems((s) => s.map((x, i) => (i === idx ? { ...x, role: v } : x)));
+                    }}
+                    placeholder="role"
+                    className="rounded-md bg-white/10 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10"
+                  />
+                  <input
+                    value={String(it.share_bps)}
+                    onChange={(e) => {
+                      const v = Math.trunc(Number(e.target.value || 0));
+                      setSplitItems((s) => s.map((x, i) => (i === idx ? { ...x, share_bps: v } : x)));
+                    }}
+                    placeholder="bps"
+                    className="rounded-md bg-white/10 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10"
+                  />
+                  <button
+                    onClick={() => setSplitItems((s) => s.filter((_, i) => i !== idx))}
+                    className="rounded-md bg-white/10 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10"
+                  >
+                    Remover
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() => setSplitItems((s) => [...s, { party_id: "", role: "participant", share_bps: 0 }])}
+                className="rounded-md bg-white/10 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10"
+              >
+                + Adicionar item
+              </button>
+            </div>
+
+            <div className="mt-3 text-xs text-slate-200/90">
+              Total: <b>{splitTotalBps()}</b> bps (deve ser 10000)
+            </div>
+            {splitError ? <div className="mt-2 text-xs text-red-200">{splitError}</div> : null}
+            <div className="mt-3">
+              <button
+                disabled={!splitRecordingId || savingSplit}
+                onClick={() => void saveSplitDraft()}
+                className="rounded-md bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-50"
+              >
+                {savingSplit ? "Salvando..." : "Salvar draft"}
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-md bg-black/30 p-4 ring-1 ring-white/10">
+            <div className="text-xs text-slate-300">Como isso vira payout (próximo passo)</div>
+            <ul className="mt-2 list-disc pl-5 text-sm text-slate-200/90">
+              <li>draft → proposed → active (e-sign)</li>
+              <li>com split active, alocamos o ledger por party</li>
+              <li>payout auto_condicional só com gates (sem claims/holds + guardian ok)</li>
+            </ul>
           </div>
         </div>
       </div>
