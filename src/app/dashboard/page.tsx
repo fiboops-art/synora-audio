@@ -82,6 +82,7 @@ export default function Dashboard() {
   const [splitItems, setSplitItems] = useState<Array<{ party_id: string; role: string; share_bps: number }>>([]);
   const [splitError, setSplitError] = useState<string | null>(null);
   const [savingSplit, setSavingSplit] = useState(false);
+  const [splitSuccess, setSplitSuccess] = useState<string | null>(null);
 
   const canImport = useMemo(() => csvText.trim().length > 0 && !!sessionToken, [csvText, sessionToken]);
 
@@ -347,6 +348,7 @@ export default function Dashboard() {
     if (!sessionToken) return;
     setSavingSplit(true);
     setSplitError(null);
+    setSplitSuccess(null);
     try {
       if (!splitRecordingId) throw new Error("Selecione um Recording");
       const total = splitTotalBps();
@@ -359,6 +361,7 @@ export default function Dashboard() {
       });
       const j = (await res.json()) as { split?: unknown; error?: string };
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setSplitSuccess("Draft salvo com sucesso.");
     } catch (e: unknown) {
       setSplitError(e instanceof Error ? e.message : "Erro ao salvar split");
     } finally {
@@ -713,6 +716,7 @@ export default function Dashboard() {
             <div className="mt-3 text-xs text-slate-200/90">
               Total: <b>{splitTotalBps()}</b> bps (deve ser 10000)
             </div>
+            {splitSuccess ? <div className="mt-2 text-xs text-emerald-200">{splitSuccess}</div> : null}
             {splitError ? <div className="mt-2 text-xs text-red-200">{splitError}</div> : null}
             <div className="mt-3">
               <button
