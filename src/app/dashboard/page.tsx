@@ -87,6 +87,11 @@ export default function Dashboard() {
   const [loadingSplit, setLoadingSplit] = useState(false);
   const [loadedSplitInfo, setLoadedSplitInfo] = useState<string | null>(null);
 
+  const partiesWithEmail = useMemo(
+    () => parties.filter((p) => (p.email ?? "").trim().length > 0),
+    [parties]
+  );
+
   const canImport = useMemo(() => csvText.trim().length > 0 && !!sessionToken, [csvText, sessionToken]);
 
   useEffect(() => {
@@ -736,9 +741,9 @@ export default function Dashboard() {
                     className="syn-select w-full px-3"
                   >
                     <option value="">Party…</option>
-                    {parties.map((p) => (
+                    {partiesWithEmail.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.display_name}
+                        {p.display_name} — {p.email}
                       </option>
                     ))}
                   </select>
