@@ -49,6 +49,10 @@ export default function Dashboard() {
     | null
   >(null);
 
+  const [applyingSplits, setApplyingSplits] = useState(false);
+  const [applySplitsMsg, setApplySplitsMsg] = useState<string | null>(null);
+  const [applySplitsErr, setApplySplitsErr] = useState<string | null>(null);
+
   const [escrow, setEscrow] = useState<
     Array<{
       id: string;
@@ -166,6 +170,31 @@ export default function Dashboard() {
       console.error(e);
     }
   }, []);
+
+  const applySplitsToLedger = useCallback(async () => {
+    if (!sessionToken) return;
+    setApplyingSplits(true);
+    setApplySplitsMsg(null);
+    setApplySplitsErr(null);
+    try {
+      const res = await fetch(`/api/ledger/apply-splits`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify({ limit: 500 }),
+      });
+      const j = (await res.json()) as { ok?: boolean; applied?: number; skipped?: number; error?: string };
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setApplySplitsMsg(`Aplicado: ${j.applied ?? 0} | Skipped: ${j.skipped ?? 0}`);
+      await refreshOverview(sessionToken);
+    } catch (e: unknown) {
+      setApplySplitsErr(e instanceof Error ? e.message : "Erro ao aplicar splits");
+    } finally {
+      setApplyingSplits(false);
+    }
+  }, [sessionToken, refreshOverview]);
 
   const refreshEscrow = useCallback(async (token: string) => {
     setLoadingEscrow(true);
@@ -524,6 +553,29 @@ export default function Dashboard() {
           <div className="text-xs text-slate-300">Quarantine</div>
           <div className="mt-1 text-lg font-semibold text-white">{overview ? overview.quarantine_count : "—"}</div>
         </div>
+      </div>
+
+      <div className="mt-4 syn-card p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-white">Ledger — Aplicar splits (party sub-ledger)</div>
+            <div className="text-sm text-slate-200/90">
+              Gera lançamentos por party a partir do split <span className="font-semibold">active</span> de cada recording.
+            </div>
+          </div>
+          <button
+            disabled={!sessionToken || applyingSplits}
+            onClick={() => void applySplitsToLedger()}
+            className="rounded-md bg-emerald-300 px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-50"
+          >
+            {applyingSplits ? "Aplicando..." : "Aplicar splits"}
+          </button>
+        </div>
+        {applySplitsErr ? (
+          <pre className="mt-3 whitespace-pre-wrap rounded-md bg-red-500/10 p-3 text-xs text-red-200 ring-1 ring-red-500/20">{applySplitsErr}</pre>
+        ) : applySplitsMsg ? (
+          <pre className="mt-3 whitespace-pre-wrap rounded-md bg-black/30 p-3 text-xs text-slate-100 ring-1 ring-white/10">{applySplitsMsg}</pre>
+        ) : null}
       </div>
 
       <div className="mt-6 syn-card-soft p-6">
