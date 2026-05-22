@@ -72,8 +72,9 @@ export default function Dashboard() {
   const [resolvingEscrowId, setResolvingEscrowId] = useState<string | null>(null);
   const [resolveRecordingId, setResolveRecordingId] = useState<string>("");
 
-  const [parties, setParties] = useState<Array<{ id: string; display_name: string; kind: string }>>([]);
+  const [parties, setParties] = useState<Array<{ id: string; display_name: string; kind: string; email?: string | null }>>([]);
   const [newPartyName, setNewPartyName] = useState("");
+  const [newPartyEmail, setNewPartyEmail] = useState("");
   const [newPartyKind, setNewPartyKind] = useState<"person" | "company">("person");
   const [partyError, setPartyError] = useState<string | null>(null);
   const [creatingParty, setCreatingParty] = useState(false);
@@ -184,7 +185,10 @@ export default function Dashboard() {
         headers: { authorization: `Bearer ${token}` },
         cache: "no-store",
       });
-      const j = (await res.json()) as { parties?: Array<{ id: string; display_name: string; kind: string }>; error?: string };
+      const j = (await res.json()) as {
+        parties?: Array<{ id: string; display_name: string; kind: string; email?: string | null }>;
+        error?: string;
+      };
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
       setParties(j.parties ?? []);
     } catch (e: unknown) {
@@ -329,11 +333,12 @@ export default function Dashboard() {
       const res = await fetch(`/api/parties`, {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${sessionToken}` },
-        body: JSON.stringify({ display_name: newPartyName, kind: newPartyKind }),
+        body: JSON.stringify({ display_name: newPartyName, kind: newPartyKind, email: newPartyEmail }),
       });
       const j = (await res.json()) as { party?: unknown; error?: string };
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
       setNewPartyName("");
+      setNewPartyEmail("");
       await refreshParties(sessionToken);
     } catch (e: unknown) {
       setPartyError(e instanceof Error ? e.message : "Erro ao criar party");
@@ -634,8 +639,16 @@ export default function Dashboard() {
               </select>
             </div>
             <div className="mt-2">
+              <input
+                value={newPartyEmail}
+                onChange={(e) => setNewPartyEmail(e.target.value)}
+                placeholder="email (obrigatório)"
+                className="w-full rounded-md bg-white/10 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10"
+              />
+            </div>
+            <div className="mt-2">
               <button
-                disabled={!newPartyName.trim() || creatingParty}
+                disabled={!newPartyName.trim() || !newPartyEmail.trim() || creatingParty}
                 onClick={() => void createParty()}
                 className="rounded-md bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-50"
               >
@@ -653,12 +666,13 @@ export default function Dashboard() {
                   <tr>
                     <th className="px-3 py-2">Nome</th>
                     <th className="px-3 py-2">Tipo</th>
+                    <th className="px-3 py-2">Email</th>
                   </tr>
                 </thead>
                 <tbody>
                   {parties.length === 0 ? (
                     <tr>
-                      <td className="px-3 py-3 text-slate-300" colSpan={2}>
+                      <td className="px-3 py-3 text-slate-300" colSpan={3}>
                         Nenhuma party ainda.
                       </td>
                     </tr>
@@ -667,6 +681,7 @@ export default function Dashboard() {
                       <tr key={p.id} className="border-t border-white/10">
                         <td className="px-3 py-2 text-slate-100">{p.display_name}</td>
                         <td className="px-3 py-2 text-slate-300">{p.kind}</td>
+                        <td className="px-3 py-2 text-slate-300">{p.email ?? "—"}</td>
                       </tr>
                     ))
                   )}
