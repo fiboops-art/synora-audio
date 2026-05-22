@@ -113,6 +113,7 @@ export async function POST(req: Request) {
     }
     const uniqIsrcs = Array.from(new Set(isrcs));
     const recordingByIsrc = new Map<string, { id: string }>();
+    const norm = (v: string) => v.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
     if (uniqIsrcs.length) {
       const { data: recs, error: recErr } = await service
         .from("recordings")
@@ -127,6 +128,28 @@ export async function POST(req: Request) {
           const k = String((r as unknown as { isrc?: unknown }).isrc ?? "").trim();
           const rid = String((r as unknown as { id?: unknown }).id ?? "").trim();
           if (k && rid) recordingByIsrc.set(k, { id: rid });
+        }
+      }
+
+      // Fallback (MVP): if nothing matched, load a larger window and match by normalized ISRC.
+      if (recordingByIsrc.size === 0) {
+        const { data: recs2, error: recErr2 } = await service
+          .from("recordings")
+          .select("id,isrc")
+          .eq("user_id", uid)
+          .not("isrc", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(1000);
+        if (recErr2) {
+          parsingErrors.push(`recordings_registry_fallback_failed:${recErr2.message}`);
+          hasWarnings = true;
+        } else {
+          for (const r of recs2 ?? []) {
+            const k = String((r as unknown as { isrc?: unknown }).isrc ?? "");
+            const rid = String((r as unknown as { id?: unknown }).id ?? "").trim();
+            const nk = norm(k);
+            if (nk && rid) recordingByIsrc.set(nk, { id: rid });
+          }
         }
       }
     }
@@ -192,8 +215,10 @@ export async function POST(req: Request) {
       const created_at = new Date().toISOString();
 
       // Matching v0: ISRC exact
-      const isrcKey = (obj.ISRC || obj.isrc || "").trim();
-      const matchedRecording = isrcKey ? recordingByIsrc.get(isrcKey) : undefined;
+      const isrcRaw = (obj.ISRC || obj.isrc || "").trim();
+      const matchedRecording = isrcRaw
+        ? recordingByIsrc.get(isrcRaw) ?? recordingByIsrc.get(norm(isrcRaw))
+        : undefined;
       const recording_id = matchedRecording?.id ?? null;
       const match_confidence = recording_id ? 1.0 : null;
       const match_method = recording_id ? "isrc" : null;
