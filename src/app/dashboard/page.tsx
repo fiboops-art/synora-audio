@@ -373,9 +373,18 @@ export default function Dashboard() {
         headers: { "content-type": "application/json", authorization: `Bearer ${sessionToken}` },
         body: JSON.stringify({ recording_id: splitRecordingId, items: splitItems }),
       });
-      const j = (await res.json()) as { split?: unknown; error?: string };
+      const j = (await res.json()) as {
+        split?: { id?: string; version?: number; status?: string };
+        error?: string;
+      };
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
       setSplitSuccess("Draft salvo com sucesso.");
+      if (j.split?.id) {
+        setLoadedSplitId(j.split.id);
+        if (typeof j.split.version === "number" && typeof j.split.status === "string") {
+          setLoadedSplitInfo(`Split carregado: v${j.split.version} (${j.split.status})`);
+        }
+      }
     } catch (e: unknown) {
       setSplitError(e instanceof Error ? e.message : "Erro ao salvar split");
     } finally {
