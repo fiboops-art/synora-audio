@@ -271,7 +271,14 @@ export default function Dashboard() {
                       (showEmptyStatements ? statements : statements.filter((s) => s.line_count > 0)).map((s) => (
                         <tr key={s.id} className="border-t border-white/10">
                           <td className="px-3 py-2">{s.report_month}</td>
-                          <td className="px-3 py-2">{s.source}</td>
+                          <td className="px-3 py-2">
+                            <Link
+                              href={`/dashboard/royalties/${s.id}`}
+                              className="text-slate-100 hover:underline"
+                            >
+                              {s.source}
+                            </Link>
+                          </td>
                           <td className="px-3 py-2">{s.line_count}</td>
                           <td className="px-3 py-2">{s.parsing_status}</td>
                         </tr>
