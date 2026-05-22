@@ -49,6 +49,13 @@ export default function Dashboard() {
     | null
   >(null);
 
+  const [partyBalances, setPartyBalances] = useState<
+    Array<{ party_id: string; display_name: string; email: string | null; balance_usd: number }>
+  >([]);
+  const [partyBalancesTotal, setPartyBalancesTotal] = useState<number | null>(null);
+  const [loadingPartyBalances, setLoadingPartyBalances] = useState(false);
+  const [partyBalancesErr, setPartyBalancesErr] = useState<string | null>(null);
+
   const [applyingSplits, setApplyingSplits] = useState(false);
   const [applySplitsMsg, setApplySplitsMsg] = useState<string | null>(null);
   const [applySplitsErr, setApplySplitsErr] = useState<string | null>(null);
@@ -171,6 +178,29 @@ export default function Dashboard() {
     }
   }, []);
 
+  const refreshPartyBalances = useCallback(async (token: string) => {
+    setLoadingPartyBalances(true);
+    setPartyBalancesErr(null);
+    try {
+      const res = await fetch(`/api/ledger/party-balances`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const j = (await res.json()) as {
+        balances?: Array<{ party_id: string; display_name: string; email: string | null; balance_usd: number }>;
+        total_usd?: number;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setPartyBalances(j.balances ?? []);
+      setPartyBalancesTotal(typeof j.total_usd === "number" ? j.total_usd : null);
+    } catch (e: unknown) {
+      setPartyBalancesErr(e instanceof Error ? e.message : "Erro ao carregar saldos por party");
+    } finally {
+      setLoadingPartyBalances(false);
+    }
+  }, []);
+
   const applySplitsToLedger = useCallback(async () => {
     if (!sessionToken) return;
     setApplyingSplits(true);
@@ -189,12 +219,13 @@ export default function Dashboard() {
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
       setApplySplitsMsg(`Aplicado: ${j.applied ?? 0} | Skipped: ${j.skipped ?? 0}`);
       await refreshOverview(sessionToken);
+      await refreshPartyBalances(sessionToken);
     } catch (e: unknown) {
       setApplySplitsErr(e instanceof Error ? e.message : "Erro ao aplicar splits");
     } finally {
       setApplyingSplits(false);
     }
-  }, [sessionToken, refreshOverview]);
+  }, [sessionToken, refreshOverview, refreshPartyBalances]);
 
   const refreshEscrow = useCallback(async (token: string) => {
     setLoadingEscrow(true);
@@ -238,6 +269,13 @@ export default function Dashboard() {
       await refreshOverview(sessionToken);
     })();
   }, [sessionToken, refreshOverview]);
+
+  useEffect(() => {
+    if (!sessionToken) return;
+    void (async () => {
+      await refreshPartyBalances(sessionToken);
+    })();
+  }, [sessionToken, refreshPartyBalances]);
 
   useEffect(() => {
     if (!sessionToken) return;
@@ -576,6 +614,49 @@ export default function Dashboard() {
         ) : applySplitsMsg ? (
           <pre className="mt-3 whitespace-pre-wrap rounded-md bg-black/30 p-3 text-xs text-slate-100 ring-1 ring-white/10">{applySplitsMsg}</pre>
         ) : null}
+      </div>
+
+      <div className="mt-4 syn-card p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-white">Saldos por party (USD)</div>
+            <div className="text-sm text-slate-200/90">Sub-ledger gerado a partir dos splits ativos.</div>
+          </div>
+          <button
+            disabled={!sessionToken || loadingPartyBalances}
+            onClick={() => sessionToken && void refreshPartyBalances(sessionToken)}
+            className="rounded-md bg-white/10 px-4 py-2 text-sm font-semibold text-slate-100 ring-1 ring-white/10 hover:bg-white/15 disabled:opacity-50"
+          >
+            {loadingPartyBalances ? "Atualizando..." : "Atualizar"}
+          </button>
+        </div>
+
+        {partyBalancesErr ? (
+          <pre className="mt-3 whitespace-pre-wrap rounded-md bg-red-500/10 p-3 text-xs text-red-200 ring-1 ring-red-500/20">
+            {partyBalancesErr}
+          </pre>
+        ) : (
+          <div className="mt-3">
+            <div className="text-xs text-slate-300">
+              Total: {partyBalancesTotal === null ? "—" : partyBalancesTotal}
+            </div>
+            <div className="mt-3 grid gap-2">
+              {partyBalances.length === 0 ? (
+                <div className="text-sm text-slate-200/80">Nenhum lançamento por party ainda. Clique em “Aplicar splits”.</div>
+              ) : (
+                partyBalances.map((b) => (
+                  <div key={b.party_id} className="flex items-center justify-between rounded-md bg-black/20 px-3 py-2 ring-1 ring-white/10">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-white">{b.display_name}</div>
+                      <div className="truncate text-xs text-slate-300">{b.email ?? b.party_id}</div>
+                    </div>
+                    <div className="ml-4 text-sm font-semibold text-emerald-200">{b.balance_usd}</div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="mt-6 syn-card-soft p-6">
