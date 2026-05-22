@@ -104,6 +104,33 @@ export async function POST(req: Request) {
     let hasWarnings = false;
     let okLines = 0;
 
+    // Master-first matching v0: preload Recording registry by ISRC (exact match => confidence 1.0)
+    const isrcs: string[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      const obj = rowToObject(header, rows[i]);
+      const isrc = (obj.ISRC || obj.isrc || "").trim();
+      if (isrc) isrcs.push(isrc);
+    }
+    const uniqIsrcs = Array.from(new Set(isrcs));
+    const recordingByIsrc = new Map<string, { id: string }>();
+    if (uniqIsrcs.length) {
+      const { data: recs, error: recErr } = await service
+        .from("recordings")
+        .select("id,isrc")
+        .eq("user_id", uid)
+        .in("isrc", uniqIsrcs);
+      if (recErr) {
+        parsingErrors.push(`recordings_registry_lookup_failed:${recErr.message}`);
+        hasWarnings = true;
+      } else {
+        for (const r of recs ?? []) {
+          const k = String((r as unknown as { isrc?: unknown }).isrc ?? "").trim();
+          const rid = String((r as unknown as { id?: unknown }).id ?? "").trim();
+          if (k && rid) recordingByIsrc.set(k, { id: rid });
+        }
+      }
+    }
+
     for (let i = 0; i < rows.length; i++) {
       const obj = rowToObject(header, rows[i]);
       const warnings: string[] = [];
@@ -164,6 +191,16 @@ export async function POST(req: Request) {
       const line_id = crypto.randomUUID();
       const created_at = new Date().toISOString();
 
+      // Matching v0: ISRC exact
+      const isrcKey = (obj.ISRC || obj.isrc || "").trim();
+      const matchedRecording = isrcKey ? recordingByIsrc.get(isrcKey) : undefined;
+      const recording_id = matchedRecording?.id ?? null;
+      const match_confidence = recording_id ? 1.0 : null;
+      const match_method = recording_id ? "isrc" : null;
+      if (recording_id && parsing_status !== "error") {
+        status = "matched";
+      }
+
       if (parsing_status === "warning") hasWarnings = true;
       if (parsing_status === "error") hasWarnings = true;
       if (parsing_status !== "error") okLines++;
@@ -202,6 +239,10 @@ export async function POST(req: Request) {
         fx_rate,
         fx_timestamp,
         net_amount_base,
+
+        recording_id,
+        match_confidence,
+        match_method,
 
         report_month: reportMonth,
         imported_at: importedAt,
@@ -249,4 +290,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: errMsg(e) }, { status: 500 });
   }
 }
-
