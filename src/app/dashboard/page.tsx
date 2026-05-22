@@ -19,6 +19,7 @@ export default function Dashboard() {
       created_at: string;
     }>
   >([]);
+  const [showEmptyStatements, setShowEmptyStatements] = useState(false);
   const [loadingStatements, setLoadingStatements] = useState(false);
 
   const [csvText, setCsvText] = useState<string>("source,report_month,imported_at,dsp,territory,original_currency,net_amount_original,ISRC,track_title,artist_name\n");
@@ -231,12 +232,23 @@ export default function Dashboard() {
             <div className="mt-4">
               <div className="flex items-center justify-between">
                 <div className="text-xs text-slate-300">Statements recentes</div>
-                <button
-                  onClick={() => sessionToken && void refreshStatements(sessionToken)}
-                  className="text-xs text-slate-200 hover:text-white"
-                >
-                  {loadingStatements ? "Atualizando..." : "Atualizar"}
-                </button>
+                <div className="flex items-center gap-3">
+                  <label className="flex cursor-pointer select-none items-center gap-2 text-xs text-slate-200/90">
+                    <input
+                      type="checkbox"
+                      checked={showEmptyStatements}
+                      onChange={(e) => setShowEmptyStatements(e.target.checked)}
+                      className="h-4 w-4 rounded border-white/20 bg-white/10"
+                    />
+                    mostrar vazios/failed
+                  </label>
+                  <button
+                    onClick={() => sessionToken && void refreshStatements(sessionToken)}
+                    className="text-xs text-slate-200 hover:text-white"
+                  >
+                    {loadingStatements ? "Atualizando..." : "Atualizar"}
+                  </button>
+                </div>
               </div>
               <div className="mt-2 overflow-hidden rounded-md ring-1 ring-white/10">
                 <table className="w-full text-left text-xs text-slate-200/90">
@@ -249,14 +261,14 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {statements.length === 0 ? (
+                    {(showEmptyStatements ? statements : statements.filter((s) => s.line_count > 0)).length === 0 ? (
                       <tr>
                         <td className="px-3 py-3 text-slate-300" colSpan={4}>
                           Nenhum statement ainda.
                         </td>
                       </tr>
                     ) : (
-                      statements.map((s) => (
+                      (showEmptyStatements ? statements : statements.filter((s) => s.line_count > 0)).map((s) => (
                         <tr key={s.id} className="border-t border-white/10">
                           <td className="px-3 py-2">{s.report_month}</td>
                           <td className="px-3 py-2">{s.source}</td>
