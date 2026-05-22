@@ -381,7 +381,7 @@ export default function Dashboard() {
             <select
               value={numberFormat}
               onChange={(e) => setNumberFormat(e.target.value as "auto" | "en_US" | "pt_BR")}
-              className="rounded-md bg-white/10 px-2 py-2 text-sm text-slate-100 ring-1 ring-white/10"
+              className="syn-select"
             >
               <option value="auto">auto</option>
               <option value="en_US">en_US</option>
@@ -557,7 +557,7 @@ export default function Dashboard() {
               <select
                 value={resolveRecordingId}
                 onChange={(e) => setResolveRecordingId(e.target.value)}
-                className="rounded-md bg-white/10 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10"
+                className="syn-select w-full px-3"
               >
                 <option value="">Selecione um Recording</option>
                 {recordings.map((r) => (
