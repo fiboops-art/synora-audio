@@ -184,6 +184,41 @@ export async function PATCH(req: Request) {
     const effectiveBase = baseUrl || "";
 
     if (action === "propose") {
+      // Hygiene: if there are older rounds for the same recording, expire their pending tokens
+      // and hide previous proposed splits (avoid link confusion across versions).
+      const recording_id = String((split as unknown as { recording_id?: unknown }).recording_id ?? "");
+      if (recording_id) {
+        const { data: otherSplits, error: oErr } = await service
+          .from("recording_splits")
+          .select("id,status")
+          .eq("user_id", uid)
+          .eq("recording_id", recording_id)
+          .neq("id", split_id);
+        if (oErr) return NextResponse.json({ error: oErr.message }, { status: 500 });
+
+        const otherIds = (otherSplits ?? [])
+          .map((x) => String((x as unknown as { id?: unknown }).id ?? ""))
+          .filter(Boolean);
+
+        if (otherIds.length) {
+          await service
+            .from("recording_split_acceptances")
+            .update({ status: "expired" })
+            .eq("user_id", uid)
+            .in("split_id", otherIds)
+            .eq("status", "pending");
+
+          // Hide previous proposed rounds (keep history but don't surface them by default)
+          await service
+            .from("recording_splits")
+            .update({ status: "superseded" })
+            .eq("user_id", uid)
+            .eq("recording_id", recording_id)
+            .eq("status", "proposed")
+            .neq("id", split_id);
+        }
+      }
+
       // Invalidate previous pending acceptances for this split (avoid link confusion)
       await service
         .from("recording_split_acceptances")
@@ -273,6 +308,25 @@ export async function PATCH(req: Request) {
           .eq("recording_id", recording_id)
           .eq("status", "active")
           .neq("id", split_id);
+
+        // Hygiene: expire any pending acceptances from older rounds (if any).
+        const { data: otherSplits } = await service
+          .from("recording_splits")
+          .select("id")
+          .eq("user_id", uid)
+          .eq("recording_id", recording_id)
+          .neq("id", split_id);
+        const otherIds = (otherSplits ?? [])
+          .map((x) => String((x as unknown as { id?: unknown }).id ?? ""))
+          .filter(Boolean);
+        if (otherIds.length) {
+          await service
+            .from("recording_split_acceptances")
+            .update({ status: "expired" })
+            .eq("user_id", uid)
+            .in("split_id", otherIds)
+            .eq("status", "pending");
+        }
       }
 
       const { error: actErr } = await service

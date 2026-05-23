@@ -16,10 +16,17 @@ function sha256Hex(input: string): string {
   return crypto.createHash("sha256").update(input).digest("hex");
 }
 
+function normalizeTokenHash(tokenOrHash: string): string {
+  const t = String(tokenOrHash ?? "").trim();
+  // Backward/ops-friendly: accept either the plain token (uuid) or a precomputed sha256 hex.
+  if (/^[a-f0-9]{64}$/i.test(t)) return t.toLowerCase();
+  return sha256Hex(t);
+}
+
 export async function GET(_req: Request, ctx: { params: Promise<{ token: string }> }) {
   try {
     const { token } = await ctx.params;
-    const token_hash = sha256Hex(token);
+    const token_hash = normalizeTokenHash(token);
 
     const service = getSupabaseService();
     const { data: acc, error: aErr } = await service
@@ -97,7 +104,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
   // Accept split without login (magic token)
   try {
     const { token } = await ctx.params;
-    const token_hash = sha256Hex(token);
+    const token_hash = normalizeTokenHash(token);
 
     const { action } = (await req.json()) as { action?: "accept" | "reject" };
     if (!action) return NextResponse.json({ error: "Missing action" }, { status: 400 });

@@ -100,6 +100,49 @@ export default function Dashboard() {
   const [loadedSplitId, setLoadedSplitId] = useState<string | null>(null);
   const [proposeLinks, setProposeLinks] = useState<Array<{ email: string; url: string }> | null>(null);
 
+  const [acceptances, setAcceptances] = useState<
+    Array<{
+      id: string;
+      party_id: string;
+      email: string;
+      status: string;
+      created_at: string;
+      expires_at: string;
+      accepted_at: string | null;
+      party: null | { display_name: string | null; email: string | null };
+    }>
+  >([]);
+  const [loadingAcceptances, setLoadingAcceptances] = useState(false);
+  const [acceptancesErr, setAcceptancesErr] = useState<string | null>(null);
+
+  const [activatingSplit, setActivatingSplit] = useState(false);
+  const [activateErr, setActivateErr] = useState<string | null>(null);
+  const [activateMsg, setActivateMsg] = useState<string | null>(null);
+
+  const refreshAcceptances = useCallback(async (token: string, splitId: string) => {
+    setLoadingAcceptances(true);
+    setAcceptancesErr(null);
+    try {
+      const res = await fetch(`/api/splits/acceptances?split_id=${encodeURIComponent(splitId)}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const j = (await res.json()) as { acceptances?: typeof acceptances; error?: string };
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setAcceptances(j.acceptances ?? []);
+    } catch (e: unknown) {
+      setAcceptancesErr(e instanceof Error ? e.message : "Erro ao carregar acceptances");
+    } finally {
+      setLoadingAcceptances(false);
+    }
+  }, []);
+
+  const canActivateSplit = useMemo(() => {
+    if (!loadedSplitId) return false;
+    if (acceptances.length === 0) return false;
+    return acceptances.every((a) => a.status === "accepted");
+  }, [loadedSplitId, acceptances]);
+
   const partiesWithEmail = useMemo(
     () => parties.filter((p) => (p.email ?? "").trim().length > 0),
     [parties]
@@ -500,8 +543,11 @@ export default function Dashboard() {
         if (j.latest_split?.id) {
           setLoadedSplitId(j.latest_split.id);
           setLoadedSplitInfo(`Split carregado: v${j.latest_split.version} (${j.latest_split.status})`);
+          // If already proposed/active, show current acceptance statuses.
+          await refreshAcceptances(token, j.latest_split.id);
         } else {
           setLoadedSplitInfo("Nenhum split salvo ainda para este recording.");
+          setAcceptances([]);
         }
       } catch (e: unknown) {
         setSplitError(e instanceof Error ? e.message : "Erro ao carregar split");
@@ -509,7 +555,7 @@ export default function Dashboard() {
         setLoadingSplit(false);
       }
     },
-    []
+    [refreshAcceptances]
   );
 
   async function proposeSplit() {
@@ -537,8 +583,37 @@ export default function Dashboard() {
       };
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
       setProposeLinks(j.acceptance_links ?? []);
+      // Refresh acceptance statuses (server-side source of truth)
+      if (loadedSplitId) await refreshAcceptances(sessionToken, loadedSplitId);
     } catch (e: unknown) {
       setSplitError(e instanceof Error ? e.message : "Erro ao propor split");
+    }
+  }
+
+  async function activateSplit() {
+    if (!sessionToken || !loadedSplitId) return;
+    if (!canActivateSplit) {
+      setActivateErr("Não dá pra ativar ainda: existem acceptances pendentes/rejeitadas/expiradas.");
+      return;
+    }
+    setActivatingSplit(true);
+    setActivateErr(null);
+    setActivateMsg(null);
+    try {
+      const res = await fetch(`/api/splits/recording`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json", authorization: `Bearer ${sessionToken}` },
+        body: JSON.stringify({ action: "activate", split_id: loadedSplitId }),
+      });
+      const j = (await res.json()) as { ok?: boolean; status?: string; error?: string };
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setActivateMsg("Split ativado ✅");
+      setLoadedSplitInfo((cur) => (cur ? `${cur} | ativo` : "Split ativo"));
+      await refreshAcceptances(sessionToken, loadedSplitId);
+    } catch (e: unknown) {
+      setActivateErr(e instanceof Error ? e.message : "Erro ao ativar split");
+    } finally {
+      setActivatingSplit(false);
     }
   }
 
@@ -657,13 +732,17 @@ export default function Dashboard() {
                 <div className="text-sm text-slate-200/80">Nenhum lançamento por party ainda. Clique em “Aplicar splits”.</div>
               ) : (
                 partyBalances.map((b) => (
-                  <div key={b.party_id} className="flex items-center justify-between rounded-md bg-black/20 px-3 py-2 ring-1 ring-white/10">
+                  <Link
+                    key={b.party_id}
+                    href={`/ledger/party/${encodeURIComponent(b.party_id)}`}
+                    className="flex items-center justify-between rounded-md bg-black/20 px-3 py-2 ring-1 ring-white/10 hover:bg-black/30"
+                  >
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold text-white">{b.display_name}</div>
                       <div className="truncate text-xs text-slate-300">{b.email ?? b.party_id}</div>
                     </div>
                     <div className="ml-4 text-sm font-semibold text-emerald-200">{usdFmt.format(b.balance_usd)}</div>
-                  </div>
+                  </Link>
                 ))
               )}
             </div>
@@ -1006,6 +1085,70 @@ export default function Dashboard() {
                         <a href={l.url} target="_blank" rel="noreferrer" className="text-emerald-200 hover:underline">
                           {l.url}
                         </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
+
+            {loadedSplitId ? (
+              <div className="mt-3 rounded-md bg-black/30 p-3 text-[11px] text-slate-100 ring-1 ring-white/10">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-slate-300">Acceptance status</div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      disabled={!sessionToken || loadingAcceptances}
+                      onClick={() => sessionToken && void refreshAcceptances(sessionToken, loadedSplitId)}
+                      className="rounded-md bg-white/10 px-3 py-1.5 text-[11px] text-slate-100 ring-1 ring-white/10 disabled:opacity-50"
+                    >
+                      {loadingAcceptances ? "Atualizando..." : "Atualizar"}
+                    </button>
+                    <button
+                      disabled={!sessionToken || activatingSplit || !canActivateSplit}
+                      onClick={() => void activateSplit()}
+                      className="rounded-md bg-emerald-500 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
+                    >
+                      {activatingSplit ? "Ativando..." : "Ativar split"}
+                    </button>
+                  </div>
+                </div>
+
+                {!canActivateSplit && acceptances.length > 0 ? (
+                  <div className="mt-2 text-slate-300">
+                    Para ativar: 100% das acceptances precisam estar em <span className="text-emerald-200">accepted</span>.
+                  </div>
+                ) : null}
+
+                {acceptancesErr ? <div className="mt-2 text-red-200">{acceptancesErr}</div> : null}
+                {activateErr ? <div className="mt-2 text-red-200">{activateErr}</div> : null}
+                {activateMsg ? <div className="mt-2 text-emerald-200">{activateMsg}</div> : null}
+
+                {acceptances.length === 0 ? (
+                  <div className="mt-2 text-slate-300">Nenhuma acceptance encontrada (proponha primeiro).</div>
+                ) : (
+                  <ul className="mt-2 space-y-1">
+                    {acceptances.map((a) => (
+                      <li key={a.id} className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="min-w-0 truncate">
+                          <span className="text-slate-200">{a.party?.display_name ?? a.party_id}</span>
+                          <span className="text-slate-400"> — {a.email}</span>
+                        </div>
+                        <div className="text-slate-200">
+                          <span
+                            className={
+                              a.status === "accepted"
+                                ? "text-emerald-200"
+                                : a.status === "rejected"
+                                  ? "text-rose-200"
+                                  : a.status === "expired"
+                                    ? "text-slate-400"
+                                    : "text-amber-200"
+                            }
+                          >
+                            {a.status}
+                          </span>
+                        </div>
                       </li>
                     ))}
                   </ul>
