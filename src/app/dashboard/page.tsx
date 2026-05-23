@@ -715,10 +715,12 @@ export default function Dashboard() {
           <a
             href="#splits"
             className={
-              (splitFlowStep >= 1
-                ? "rounded-full bg-white/10 px-3 py-1 text-slate-100 ring-1 ring-white/10"
-                : "rounded-full bg-black/20 px-3 py-1 text-slate-400 ring-1 ring-white/10") +
-              " hover:bg-white/15"
+              "rounded-full px-3 py-1 ring-1 ring-white/10 hover:bg-white/15 " +
+              (splitFlowStep === 1
+                ? "bg-emerald-500/20 text-emerald-200 ring-emerald-500/30"
+                : splitFlowStep > 1
+                  ? "bg-white/10 text-slate-200"
+                  : "bg-black/20 text-slate-400")
             }
           >
             1) Propor (propose)
@@ -727,10 +729,12 @@ export default function Dashboard() {
           <a
             href="#accept"
             className={
-              (splitFlowStep >= 2
-                ? "rounded-full bg-white/10 px-3 py-1 text-slate-100 ring-1 ring-white/10"
-                : "rounded-full bg-black/20 px-3 py-1 text-slate-400 ring-1 ring-white/10") +
-              " hover:bg-white/15"
+              "rounded-full px-3 py-1 ring-1 ring-white/10 hover:bg-white/15 " +
+              (splitFlowStep === 2
+                ? "bg-emerald-500/20 text-emerald-200 ring-emerald-500/30"
+                : splitFlowStep > 2
+                  ? "bg-white/10 text-slate-200"
+                  : "bg-black/20 text-slate-400")
             }
           >
             2) Aceitar (accept)
@@ -739,10 +743,12 @@ export default function Dashboard() {
           <a
             href="#activate"
             className={
-              (splitFlowStep >= 3
-                ? "rounded-full bg-white/10 px-3 py-1 text-slate-100 ring-1 ring-white/10"
-                : "rounded-full bg-black/20 px-3 py-1 text-slate-400 ring-1 ring-white/10") +
-              " hover:bg-white/15"
+              "rounded-full px-3 py-1 ring-1 ring-white/10 hover:bg-white/15 " +
+              (splitFlowStep === 3
+                ? "bg-emerald-500/20 text-emerald-200 ring-emerald-500/30"
+                : splitFlowStep > 3
+                  ? "bg-white/10 text-slate-200"
+                  : "bg-black/20 text-slate-400")
             }
           >
             3) Ativar (activate)
@@ -751,10 +757,12 @@ export default function Dashboard() {
           <a
             href="#apply-ledger"
             className={
-              (splitFlowStep >= 4
-                ? "rounded-full bg-white/10 px-3 py-1 text-slate-100 ring-1 ring-white/10"
-                : "rounded-full bg-black/20 px-3 py-1 text-slate-400 ring-1 ring-white/10") +
-              " hover:bg-white/15"
+              "rounded-full px-3 py-1 ring-1 ring-white/10 hover:bg-white/15 " +
+              (splitFlowStep === 4
+                ? "bg-emerald-500/20 text-emerald-200 ring-emerald-500/30"
+                : splitFlowStep > 4
+                  ? "bg-white/10 text-slate-200"
+                  : "bg-black/20 text-slate-400")
             }
           >
             4) Aplicar no ledger (apply)
@@ -764,7 +772,11 @@ export default function Dashboard() {
             href="#balances"
             className={
               "rounded-full px-3 py-1 ring-1 ring-white/10 hover:bg-white/15 " +
-              (splitFlowStep >= 5 ? "bg-white/10 text-slate-100" : "bg-black/20 text-slate-400")
+              (splitFlowStep === 5
+                ? "bg-emerald-500/20 text-emerald-200 ring-emerald-500/30"
+                : splitFlowStep > 5
+                  ? "bg-white/10 text-slate-200"
+                  : "bg-black/20 text-slate-400")
             }
           >
             5) Saldos por party (balances)
