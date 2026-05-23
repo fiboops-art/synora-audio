@@ -6,6 +6,34 @@ import { useRouter } from "next/navigation";
 import { usePathname } from "next/navigation";
 import { getSupabase } from "@/lib/supabaseClient";
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function Highlight({ text, q }: { text: string; q: string }) {
+  const needle = q.trim();
+  if (!needle) return <>{text}</>;
+  const re = new RegExp(`(${escapeRegExp(needle)})`, "ig");
+  const parts = text.split(re);
+  return (
+    <>
+      {parts.map((p, i) => {
+        const isHit = p.toLowerCase() === needle.toLowerCase();
+        return isHit ? (
+          <mark
+            key={i}
+            className="rounded bg-amber-400/25 px-0.5 text-amber-200 ring-1 ring-amber-500/20"
+          >
+            {p}
+          </mark>
+        ) : (
+          <span key={i}>{p}</span>
+        );
+      })}
+    </>
+  );
+}
+
 export default function PartyLedgerPage({ params }: { params: { party_id: string } }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -237,9 +265,18 @@ export default function PartyLedgerPage({ params }: { params: { party_id: string
                     <tr key={idx} className="border-t border-white/10">
                       <td className="px-3 py-2 whitespace-nowrap">{String(e.created_at).slice(0, 10)}</td>
                       <td className="px-3 py-2">
-                        <div className="text-slate-100">{e.line?.track_title ?? "—"}</div>
+                        <div className="text-slate-100">
+                          <Highlight text={e.line?.track_title ?? "—"} q={q} />
+                        </div>
                         <div className="text-[11px] text-slate-300">
-                          {(e.line?.artist_name ?? "").trim()} {e.line?.isrc ? `• ${e.line.isrc}` : ""}
+                          <Highlight text={(e.line?.artist_name ?? "").trim()} q={q} />{" "}
+                          {e.line?.isrc ? (
+                            <>
+                              • <Highlight text={String(e.line.isrc)} q={q} />
+                            </>
+                          ) : (
+                            ""
+                          )}
                         </div>
                       </td>
                       <td className="px-3 py-2">
