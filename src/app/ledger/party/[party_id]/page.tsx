@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { getSupabase } from "@/lib/supabaseClient";
 
 export default function PartyLedgerPage({ params }: { params: { party_id: string } }) {
   const router = useRouter();
+  const pathname = usePathname();
   const partyId = String(params.party_id ?? "").trim();
 
   const [sessionToken, setSessionToken] = useState<string | null>(null);
@@ -102,6 +104,7 @@ export default function PartyLedgerPage({ params }: { params: { party_id: string
         {!partyId ? (
           <pre className="whitespace-pre-wrap rounded-md bg-red-500/10 p-3 text-xs text-red-200 ring-1 ring-red-500/20">
             party_id inválido
+            {"\n"}path: {pathname}
           </pre>
         ) : loading ? (
           <div className="text-sm text-slate-200/90">Carregando…</div>

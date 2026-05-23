@@ -835,19 +835,32 @@ export default function Dashboard() {
               {partyBalances.length === 0 ? (
                 <div className="text-sm text-slate-200/80">Nenhum lançamento por party ainda. Clique em “Aplicar splits”.</div>
               ) : (
-                partyBalances.map((b) => (
-                  <Link
-                    key={b.party_id}
-                    href={`/ledger/party/${encodeURIComponent(b.party_id)}`}
-                    className="flex items-center justify-between rounded-md bg-black/20 px-3 py-2 ring-1 ring-white/10 hover:bg-black/30"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-white">{b.display_name}</div>
-                      <div className="truncate text-xs text-slate-300">{b.email ?? b.party_id}</div>
+                partyBalances.map((b) =>
+                  b.party_id ? (
+                    <Link
+                      key={b.party_id}
+                      href={`/ledger/party/${b.party_id}`}
+                      className="flex items-center justify-between rounded-md bg-black/20 px-3 py-2 ring-1 ring-white/10 hover:bg-black/30"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-white">{b.display_name}</div>
+                        <div className="truncate text-xs text-slate-300">{b.email ?? b.party_id}</div>
+                      </div>
+                      <div className="ml-4 text-sm font-semibold text-emerald-200">{usdFmt.format(b.balance_usd)}</div>
+                    </Link>
+                  ) : (
+                    <div
+                      key={String(b.display_name)}
+                      className="flex items-center justify-between rounded-md bg-black/10 px-3 py-2 ring-1 ring-white/10"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-white">{b.display_name}</div>
+                        <div className="truncate text-xs text-slate-300">party_id ausente</div>
+                      </div>
+                      <div className="ml-4 text-sm font-semibold text-slate-300">{usdFmt.format(b.balance_usd)}</div>
                     </div>
-                    <div className="ml-4 text-sm font-semibold text-emerald-200">{usdFmt.format(b.balance_usd)}</div>
-                  </Link>
-                ))
+                  )
+                )
               )}
             </div>
           </div>
