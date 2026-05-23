@@ -56,7 +56,12 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col text-slate-50">
-        {children}
+        <div className="flex-1">{children}</div>
+        <footer className="mx-auto w-full max-w-6xl px-4 py-8">
+          <div className="text-center text-xs text-slate-300/80">
+            Synora — by Fiboops
+          </div>
+        </footer>
       </body>
     </html>
   );
