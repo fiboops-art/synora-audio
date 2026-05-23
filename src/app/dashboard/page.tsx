@@ -164,6 +164,18 @@ export default function Dashboard() {
     []
   );
 
+  const splitFlowStep = useMemo(() => {
+    // 1 propose -> 2 accept -> 3 activate -> 4 apply -> 5 balances
+    const hasBalances = (partyBalances?.length ?? 0) > 0 && typeof partyBalancesTotal === "number";
+    if (!loadedSplitId) return 1;
+    if (loadedSplitStatus === "active") return hasBalances ? 5 : 4;
+    if ((loadedSplitStatus ?? "") === "proposed") {
+      const allAccepted = acceptances.length > 0 && acceptances.every((a) => a.status === "accepted");
+      return allAccepted ? 3 : 2;
+    }
+    return 1;
+  }, [loadedSplitId, loadedSplitStatus, acceptances, partyBalances, partyBalancesTotal]);
+
   useEffect(() => {
     (async () => {
       const supabase = getSupabase();
@@ -687,6 +699,38 @@ export default function Dashboard() {
         <div className="syn-card p-4">
           <div className="text-xs text-slate-300">Quarantine</div>
           <div className="mt-1 text-lg font-semibold text-white">{overview ? overview.quarantine_count : "—"}</div>
+        </div>
+      </div>
+
+      <div className="mt-4 syn-card p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-white">Split → Ledger — Timeline</div>
+            <div className="text-sm text-slate-200/90">Guia rápido do fluxo operacional (MVP).</div>
+          </div>
+          <div className="text-xs text-slate-300">Passo atual: {splitFlowStep}/5</div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
+          <span className={splitFlowStep >= 1 ? "rounded-full bg-white/10 px-3 py-1 text-slate-100 ring-1 ring-white/10" : "rounded-full bg-black/20 px-3 py-1 text-slate-400 ring-1 ring-white/10"}>
+            1) propose
+          </span>
+          <span className="text-slate-500">→</span>
+          <span className={splitFlowStep >= 2 ? "rounded-full bg-white/10 px-3 py-1 text-slate-100 ring-1 ring-white/10" : "rounded-full bg-black/20 px-3 py-1 text-slate-400 ring-1 ring-white/10"}>
+            2) accept
+          </span>
+          <span className="text-slate-500">→</span>
+          <span className={splitFlowStep >= 3 ? "rounded-full bg-white/10 px-3 py-1 text-slate-100 ring-1 ring-white/10" : "rounded-full bg-black/20 px-3 py-1 text-slate-400 ring-1 ring-white/10"}>
+            3) activate
+          </span>
+          <span className="text-slate-500">→</span>
+          <span className={splitFlowStep >= 4 ? "rounded-full bg-white/10 px-3 py-1 text-slate-100 ring-1 ring-white/10" : "rounded-full bg-black/20 px-3 py-1 text-slate-400 ring-1 ring-white/10"}>
+            4) apply to ledger
+          </span>
+          <span className="text-slate-500">→</span>
+          <span className={"rounded-full px-3 py-1 ring-1 ring-white/10 " + (splitFlowStep >= 5 ? "bg-white/10 text-slate-100" : "bg-black/20 text-slate-400") }>
+            5) balances by party
+          </span>
         </div>
       </div>
 
