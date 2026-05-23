@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseService } from "@/lib/supabaseServer";
 import crypto from "crypto";
+import { validateWithGuardian } from "@/lib/guardianClient";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -298,8 +299,59 @@ export async function PATCH(req: Request) {
         return NextResponse.json({ error: `Cannot activate: ${pending} acceptances not accepted` }, { status: 400 });
       }
 
-      // Supersede previous active splits for this recording
+      // ✅ FIRST REAL GATE: Guardian must approve BEFORE activation enters the flow.
+      // Fail-closed if Guardian is not configured/unavailable.
+      if (!process.env.NEXT_PUBLIC_GUARDIAN_URL) {
+        return NextResponse.json(
+          {
+            error: "Guardian não configurado: bloqueado antes de ativar.",
+            required_actions: ["Configurar NEXT_PUBLIC_GUARDIAN_URL"],
+          },
+          { status: 503 }
+        );
+      }
+
       const recording_id = String((split as unknown as { recording_id?: unknown }).recording_id ?? "");
+      const split_version = Number((split as unknown as { version?: unknown }).version ?? 0) || null;
+      const correlation_id = crypto.randomUUID();
+
+      const guardianDecision = await validateWithGuardian({
+        stage: "C",
+        metadata: {
+          product: "synora-audio",
+          content_type: "recording_split_activation",
+          correlation_id,
+          user_id: uid,
+          recording_id,
+          split_id,
+          split_version,
+          acceptances_required: rows.length,
+          acceptances_pending: 0,
+        },
+        proposal: {
+          kind: "recording_split",
+          split: {
+            id: split_id,
+            recording_id,
+            version: split_version,
+            status: (split as unknown as { status?: unknown }).status ?? null,
+          },
+          items: itemRows,
+          acceptances: rows,
+        },
+      });
+
+      if (guardianDecision.status === "BLOCKED") {
+        return NextResponse.json(
+          {
+            error: "Guardian bloqueou a ativação do split.",
+            guardian: guardianDecision,
+          },
+          { status: 403 }
+        );
+      }
+
+      // Supersede previous active splits for this recording
       if (recording_id) {
         await service
           .from("recording_splits")
