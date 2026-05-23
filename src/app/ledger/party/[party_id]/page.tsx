@@ -32,6 +32,7 @@ export default function PartyLedgerPage({ params }: { params: { party_id: string
             report_month: string | null;
           };
           statement: null | {
+            id: string;
             source: string | null;
             report_month: string | null;
             imported_at: string | null;
@@ -41,6 +42,9 @@ export default function PartyLedgerPage({ params }: { params: { party_id: string
         total_usd: number;
       }
   >(null);
+
+  const [monthFilter, setMonthFilter] = useState<string>("all");
+  const [statementFilter, setStatementFilter] = useState<string>("all");
 
   const usdFmt = useMemo(
     () =>
@@ -52,6 +56,42 @@ export default function PartyLedgerPage({ params }: { params: { party_id: string
         maximumFractionDigits: 2,
       }),
     []
+  );
+
+  const months = useMemo(() => {
+    const s = new Set<string>();
+    for (const e of data?.entries ?? []) {
+      const m = (e.line?.report_month ?? e.statement?.report_month ?? "").trim();
+      if (m) s.add(m);
+    }
+    return Array.from(s).sort().reverse();
+  }, [data]);
+
+  const statements = useMemo(() => {
+    const map = new Map<string, { id: string; label: string }>();
+    for (const e of data?.entries ?? []) {
+      const st = e.statement;
+      if (!st?.id) continue;
+      const label = `${st.source ?? "—"} • ${st.file_name ?? st.id}`;
+      map.set(st.id, { id: st.id, label });
+    }
+    return Array.from(map.values());
+  }, [data]);
+
+  const filteredEntries = useMemo(() => {
+    const src = data?.entries ?? [];
+    return src.filter((e) => {
+      const m = (e.line?.report_month ?? e.statement?.report_month ?? "").trim();
+      if (monthFilter !== "all" && m !== monthFilter) return false;
+      const sid = String(e.statement?.id ?? "");
+      if (statementFilter !== "all" && sid !== statementFilter) return false;
+      return true;
+    });
+  }, [data, monthFilter, statementFilter]);
+
+  const filteredTotalUsd = useMemo(
+    () => filteredEntries.reduce((acc, x) => acc + Number(x.amount_usd ?? 0), 0),
+    [filteredEntries]
   );
 
   useEffect(() => {
@@ -120,8 +160,46 @@ export default function PartyLedgerPage({ params }: { params: { party_id: string
               <div>
                 <div className="text-lg font-semibold text-white">{data.party.display_name}</div>
                 <div className="text-xs text-slate-300">{data.party.email ?? data.party.id}</div>
+                <div className="text-[11px] text-slate-400">party_id: {data.party.id}</div>
               </div>
-              <div className="text-sm font-semibold text-emerald-200">Total (no recorte): {usdFmt.format(data.total_usd)}</div>
+              <div className="text-sm font-semibold text-emerald-200">Total (no recorte): {usdFmt.format(filteredTotalUsd)}</div>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="text-xs text-slate-300">Filtros</div>
+              <select
+                value={monthFilter}
+                onChange={(e) => setMonthFilter(e.target.value)}
+                className="syn-select"
+              >
+                <option value="all">Mês (todos)</option>
+                {months.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={statementFilter}
+                onChange={(e) => setStatementFilter(e.target.value)}
+                className="syn-select"
+              >
+                <option value="all">Statement (todos)</option>
+                {statements.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => {
+                  setMonthFilter("all");
+                  setStatementFilter("all");
+                }}
+                className="rounded-md bg-white/10 px-3 py-2 text-xs font-semibold text-slate-100 ring-1 ring-white/10 hover:bg-white/15"
+              >
+                Limpar
+              </button>
             </div>
 
             <div className="mt-4 overflow-hidden rounded-md ring-1 ring-white/10">
@@ -135,7 +213,7 @@ export default function PartyLedgerPage({ params }: { params: { party_id: string
                   </tr>
                 </thead>
                 <tbody>
-                  {data.entries.map((e, idx) => (
+                  {filteredEntries.map((e, idx) => (
                     <tr key={idx} className="border-t border-white/10">
                       <td className="px-3 py-2 whitespace-nowrap">{String(e.created_at).slice(0, 10)}</td>
                       <td className="px-3 py-2">

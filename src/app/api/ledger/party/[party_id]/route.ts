@@ -105,4 +105,3 @@ export async function GET(req: Request, ctx: { params: Promise<{ party_id: strin
     return NextResponse.json({ error: errMsg(e) }, { status: 500 });
   }
 }
-
