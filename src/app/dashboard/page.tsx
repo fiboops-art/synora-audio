@@ -712,29 +712,67 @@ export default function Dashboard() {
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
-          <span className={splitFlowStep >= 1 ? "rounded-full bg-white/10 px-3 py-1 text-slate-100 ring-1 ring-white/10" : "rounded-full bg-black/20 px-3 py-1 text-slate-400 ring-1 ring-white/10"}>
-            1) propose
-          </span>
+          <a
+            href="#splits"
+            className={
+              (splitFlowStep >= 1
+                ? "rounded-full bg-white/10 px-3 py-1 text-slate-100 ring-1 ring-white/10"
+                : "rounded-full bg-black/20 px-3 py-1 text-slate-400 ring-1 ring-white/10") +
+              " hover:bg-white/15"
+            }
+          >
+            1) Propor (propose)
+          </a>
           <span className="text-slate-500">→</span>
-          <span className={splitFlowStep >= 2 ? "rounded-full bg-white/10 px-3 py-1 text-slate-100 ring-1 ring-white/10" : "rounded-full bg-black/20 px-3 py-1 text-slate-400 ring-1 ring-white/10"}>
-            2) accept
-          </span>
+          <a
+            href="#accept"
+            className={
+              (splitFlowStep >= 2
+                ? "rounded-full bg-white/10 px-3 py-1 text-slate-100 ring-1 ring-white/10"
+                : "rounded-full bg-black/20 px-3 py-1 text-slate-400 ring-1 ring-white/10") +
+              " hover:bg-white/15"
+            }
+          >
+            2) Aceitar (accept)
+          </a>
           <span className="text-slate-500">→</span>
-          <span className={splitFlowStep >= 3 ? "rounded-full bg-white/10 px-3 py-1 text-slate-100 ring-1 ring-white/10" : "rounded-full bg-black/20 px-3 py-1 text-slate-400 ring-1 ring-white/10"}>
-            3) activate
-          </span>
+          <a
+            href="#activate"
+            className={
+              (splitFlowStep >= 3
+                ? "rounded-full bg-white/10 px-3 py-1 text-slate-100 ring-1 ring-white/10"
+                : "rounded-full bg-black/20 px-3 py-1 text-slate-400 ring-1 ring-white/10") +
+              " hover:bg-white/15"
+            }
+          >
+            3) Ativar (activate)
+          </a>
           <span className="text-slate-500">→</span>
-          <span className={splitFlowStep >= 4 ? "rounded-full bg-white/10 px-3 py-1 text-slate-100 ring-1 ring-white/10" : "rounded-full bg-black/20 px-3 py-1 text-slate-400 ring-1 ring-white/10"}>
-            4) apply to ledger
-          </span>
+          <a
+            href="#apply-ledger"
+            className={
+              (splitFlowStep >= 4
+                ? "rounded-full bg-white/10 px-3 py-1 text-slate-100 ring-1 ring-white/10"
+                : "rounded-full bg-black/20 px-3 py-1 text-slate-400 ring-1 ring-white/10") +
+              " hover:bg-white/15"
+            }
+          >
+            4) Aplicar no ledger (apply)
+          </a>
           <span className="text-slate-500">→</span>
-          <span className={"rounded-full px-3 py-1 ring-1 ring-white/10 " + (splitFlowStep >= 5 ? "bg-white/10 text-slate-100" : "bg-black/20 text-slate-400") }>
-            5) balances by party
-          </span>
+          <a
+            href="#balances"
+            className={
+              "rounded-full px-3 py-1 ring-1 ring-white/10 hover:bg-white/15 " +
+              (splitFlowStep >= 5 ? "bg-white/10 text-slate-100" : "bg-black/20 text-slate-400")
+            }
+          >
+            5) Saldos por party (balances)
+          </a>
         </div>
       </div>
 
-      <div className="mt-4 syn-card p-4">
+      <div id="apply-ledger" className="mt-4 syn-card p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="text-sm font-semibold text-white">Ledger — Aplicar splits (party sub-ledger)</div>
@@ -757,7 +795,7 @@ export default function Dashboard() {
         ) : null}
       </div>
 
-      <div className="mt-4 syn-card p-4">
+      <div id="balances" className="mt-4 syn-card p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="text-sm font-semibold text-white">Saldos por party (USD)</div>
@@ -1019,7 +1057,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="mt-6 syn-card p-6">
+      <div id="splits" className="mt-6 syn-card p-6">
         <div className="text-sm font-semibold text-white">Rights (MVP) — Recording Splits (draft)</div>
         <div className="mt-1 text-sm text-slate-200/90">Define como o Master será distribuído (bps = 10000 = 100%).</div>
 
@@ -1147,9 +1185,9 @@ export default function Dashboard() {
             ) : null}
 
             {loadedSplitId ? (
-              <div className="mt-3 rounded-md bg-black/30 p-3 text-[11px] text-slate-100 ring-1 ring-white/10">
+              <div id="activate" className="mt-3 rounded-md bg-black/30 p-3 text-[11px] text-slate-100 ring-1 ring-white/10">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="text-slate-300">Acceptance status</div>
+                  <div className="text-slate-300">Aceitar / Ativar (accept / activate)</div>
                   <div className="flex items-center gap-2">
                     <button
                       disabled={!sessionToken || loadingAcceptances}
