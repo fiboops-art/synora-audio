@@ -9,7 +9,9 @@ import { getSupabase } from "@/lib/supabaseClient";
 export default function PartyLedgerPage({ params }: { params: { party_id: string } }) {
   const router = useRouter();
   const pathname = usePathname();
-  const partyId = String(params.party_id ?? "").trim();
+  const partyIdFromParams = String(params.party_id ?? "").trim();
+  const partyIdFromPath = String(pathname.split("/").filter(Boolean).pop() ?? "").trim();
+  const partyId = partyIdFromParams || partyIdFromPath;
 
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
