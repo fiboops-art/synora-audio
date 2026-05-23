@@ -98,6 +98,7 @@ export default function Dashboard() {
   const [loadingSplit, setLoadingSplit] = useState(false);
   const [loadedSplitInfo, setLoadedSplitInfo] = useState<string | null>(null);
   const [loadedSplitId, setLoadedSplitId] = useState<string | null>(null);
+  const [loadedSplitStatus, setLoadedSplitStatus] = useState<string | null>(null);
   const [proposeLinks, setProposeLinks] = useState<Array<{ email: string; url: string }> | null>(null);
 
   const [acceptances, setAcceptances] = useState<
@@ -139,9 +140,10 @@ export default function Dashboard() {
 
   const canActivateSplit = useMemo(() => {
     if (!loadedSplitId) return false;
+    if (loadedSplitStatus === "active") return false;
     if (acceptances.length === 0) return false;
     return acceptances.every((a) => a.status === "accepted");
-  }, [loadedSplitId, acceptances]);
+  }, [loadedSplitId, loadedSplitStatus, acceptances]);
 
   const partiesWithEmail = useMemo(
     () => parties.filter((p) => (p.email ?? "").trim().length > 0),
@@ -519,6 +521,7 @@ export default function Dashboard() {
       setLoadingSplit(true);
       setLoadedSplitInfo(null);
       setLoadedSplitId(null);
+      setLoadedSplitStatus(null);
       setProposeLinks(null);
       setSplitError(null);
       try {
@@ -542,11 +545,13 @@ export default function Dashboard() {
 
         if (j.latest_split?.id) {
           setLoadedSplitId(j.latest_split.id);
+          setLoadedSplitStatus(j.latest_split.status);
           setLoadedSplitInfo(`Split carregado: v${j.latest_split.version} (${j.latest_split.status})`);
           // If already proposed/active, show current acceptance statuses.
           await refreshAcceptances(token, j.latest_split.id);
         } else {
           setLoadedSplitInfo("Nenhum split salvo ainda para este recording.");
+          setLoadedSplitStatus(null);
           setAcceptances([]);
         }
       } catch (e: unknown) {
@@ -592,6 +597,7 @@ export default function Dashboard() {
 
   async function activateSplit() {
     if (!sessionToken || !loadedSplitId) return;
+    if (loadedSplitStatus === "active") return;
     if (!canActivateSplit) {
       setActivateErr("Não dá pra ativar ainda: existem acceptances pendentes/rejeitadas/expiradas.");
       return;
@@ -608,7 +614,11 @@ export default function Dashboard() {
       const j = (await res.json()) as { ok?: boolean; status?: string; error?: string };
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
       setActivateMsg("Split ativado ✅");
-      setLoadedSplitInfo((cur) => (cur ? `${cur} | ativo` : "Split ativo"));
+      setLoadedSplitStatus("active");
+      setLoadedSplitInfo((cur) => {
+        const base = cur ?? "";
+        return base.includes("(active)") || base.includes("ativo") ? base : `${base} | ativo`;
+      });
       await refreshAcceptances(sessionToken, loadedSplitId);
     } catch (e: unknown) {
       setActivateErr(e instanceof Error ? e.message : "Erro ao ativar split");
@@ -1105,11 +1115,11 @@ export default function Dashboard() {
                       {loadingAcceptances ? "Atualizando..." : "Atualizar"}
                     </button>
                     <button
-                      disabled={!sessionToken || activatingSplit || !canActivateSplit}
+                      disabled={!sessionToken || activatingSplit || !canActivateSplit || loadedSplitStatus === "active"}
                       onClick={() => void activateSplit()}
                       className="rounded-md bg-emerald-500 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
                     >
-                      {activatingSplit ? "Ativando..." : "Ativar split"}
+                      {loadedSplitStatus === "active" ? "Ativo" : activatingSplit ? "Ativando..." : "Ativar split"}
                     </button>
                   </div>
                 </div>
