@@ -22,7 +22,8 @@ export default function AcceptSplitPage({ params }: { params: { token: string } 
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/accept/split/${encodeURIComponent(token)}`, { cache: "no-store" });
+        // Cache-buster: avoids any edge/proxy weirdness returning stale 404s for fresh tokens
+        const res = await fetch(`/api/accept/split/${encodeURIComponent(token)}?_ts=${Date.now()}`, { cache: "no-store" });
         const j = (await res.json()) as AcceptanceView & { error?: string };
         if (!res.ok) throw new Error(j?.error || `HTTP ${res.status}`);
         setData(j);
