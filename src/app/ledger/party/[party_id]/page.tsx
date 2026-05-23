@@ -45,6 +45,7 @@ export default function PartyLedgerPage({ params }: { params: { party_id: string
 
   const [monthFilter, setMonthFilter] = useState<string>("all");
   const [statementFilter, setStatementFilter] = useState<string>("all");
+  const [q, setQ] = useState<string>("");
 
   const usdFmt = useMemo(
     () =>
@@ -80,14 +81,22 @@ export default function PartyLedgerPage({ params }: { params: { party_id: string
 
   const filteredEntries = useMemo(() => {
     const src = data?.entries ?? [];
+    const needle = q.trim().toLowerCase();
     return src.filter((e) => {
       const m = (e.line?.report_month ?? e.statement?.report_month ?? "").trim();
       if (monthFilter !== "all" && m !== monthFilter) return false;
       const sid = String(e.statement?.id ?? "");
       if (statementFilter !== "all" && sid !== statementFilter) return false;
+
+      if (needle) {
+        const track = String(e.line?.track_title ?? "").toLowerCase();
+        const artist = String(e.line?.artist_name ?? "").toLowerCase();
+        const isrc = String(e.line?.isrc ?? "").toLowerCase();
+        if (!track.includes(needle) && !artist.includes(needle) && !isrc.includes(needle)) return false;
+      }
       return true;
     });
-  }, [data, monthFilter, statementFilter]);
+  }, [data, monthFilter, statementFilter, q]);
 
   const filteredTotalUsd = useMemo(
     () => filteredEntries.reduce((acc, x) => acc + Number(x.amount_usd ?? 0), 0),
@@ -167,6 +176,12 @@ export default function PartyLedgerPage({ params }: { params: { party_id: string
 
             <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
               <div className="text-xs text-slate-300">Filtros</div>
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Buscar track / artista / ISRC"
+                className="w-full rounded-md bg-white/10 px-3 py-2 text-xs text-slate-100 ring-1 ring-white/10 placeholder:text-slate-400 sm:w-[260px]"
+              />
               <select
                 value={monthFilter}
                 onChange={(e) => setMonthFilter(e.target.value)}
@@ -195,11 +210,16 @@ export default function PartyLedgerPage({ params }: { params: { party_id: string
                 onClick={() => {
                   setMonthFilter("all");
                   setStatementFilter("all");
+                  setQ("");
                 }}
                 className="rounded-md bg-white/10 px-3 py-2 text-xs font-semibold text-slate-100 ring-1 ring-white/10 hover:bg-white/15"
               >
                 Limpar
               </button>
+            </div>
+
+            <div className="mt-2 text-[11px] text-slate-400">
+              Linhas: {filteredEntries.length}{data.entries.length !== filteredEntries.length ? ` (de ${data.entries.length})` : ""}
             </div>
 
             <div className="mt-4 overflow-hidden rounded-md ring-1 ring-white/10">
