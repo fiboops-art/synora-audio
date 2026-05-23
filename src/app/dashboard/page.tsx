@@ -1221,7 +1221,7 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {!canActivateSplit && acceptances.length > 0 ? (
+                {!canActivateSplit && loadedSplitStatus !== "active" && acceptances.length > 0 ? (
                   <div className="mt-2 text-slate-300">
                     Para ativar: 100% das acceptances precisam estar em <span className="text-emerald-200">accepted</span>.
                   </div>
