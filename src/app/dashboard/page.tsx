@@ -717,7 +717,7 @@ export default function Dashboard() {
             className={
               "rounded-full px-3 py-1 ring-1 ring-white/10 hover:bg-white/15 " +
               (splitFlowStep === 1
-                ? "bg-emerald-500/20 text-emerald-200 ring-emerald-500/30"
+                ? "bg-white/15 text-white ring-white/20"
                 : splitFlowStep > 1
                   ? "bg-white/10 text-slate-200"
                   : "bg-black/20 text-slate-400")
@@ -731,7 +731,7 @@ export default function Dashboard() {
             className={
               "rounded-full px-3 py-1 ring-1 ring-white/10 hover:bg-white/15 " +
               (splitFlowStep === 2
-                ? "bg-emerald-500/20 text-emerald-200 ring-emerald-500/30"
+                ? "bg-white/15 text-white ring-white/20"
                 : splitFlowStep > 2
                   ? "bg-white/10 text-slate-200"
                   : "bg-black/20 text-slate-400")
@@ -745,7 +745,7 @@ export default function Dashboard() {
             className={
               "rounded-full px-3 py-1 ring-1 ring-white/10 hover:bg-white/15 " +
               (splitFlowStep === 3
-                ? "bg-emerald-500/20 text-emerald-200 ring-emerald-500/30"
+                ? "bg-white/15 text-white ring-white/20"
                 : splitFlowStep > 3
                   ? "bg-white/10 text-slate-200"
                   : "bg-black/20 text-slate-400")
@@ -759,7 +759,7 @@ export default function Dashboard() {
             className={
               "rounded-full px-3 py-1 ring-1 ring-white/10 hover:bg-white/15 " +
               (splitFlowStep === 4
-                ? "bg-emerald-500/20 text-emerald-200 ring-emerald-500/30"
+                ? "bg-white/15 text-white ring-white/20"
                 : splitFlowStep > 4
                   ? "bg-white/10 text-slate-200"
                   : "bg-black/20 text-slate-400")
@@ -773,7 +773,7 @@ export default function Dashboard() {
             className={
               "rounded-full px-3 py-1 ring-1 ring-white/10 hover:bg-white/15 " +
               (splitFlowStep === 5
-                ? "bg-emerald-500/20 text-emerald-200 ring-emerald-500/30"
+                ? "bg-white/15 text-white ring-white/20"
                 : splitFlowStep > 5
                   ? "bg-white/10 text-slate-200"
                   : "bg-black/20 text-slate-400")
