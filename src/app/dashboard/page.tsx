@@ -274,7 +274,7 @@ export default function Dashboard() {
       });
       const j = (await res.json()) as { ok?: boolean; applied?: number; skipped?: number; error?: string };
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
-      setApplySplitsMsg(`Aplicado: ${j.applied ?? 0} | Skipped: ${j.skipped ?? 0}`);
+      setApplySplitsMsg(`Aplicado: ${j.applied ?? 0} | Já aplicado (skip): ${j.skipped ?? 0}`);
       await refreshOverview(sessionToken);
       await refreshPartyBalances(sessionToken);
     } catch (e: unknown) {
