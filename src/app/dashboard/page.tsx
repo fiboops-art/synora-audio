@@ -1117,7 +1117,10 @@ export default function Dashboard() {
                     <button
                       disabled={!sessionToken || activatingSplit || !canActivateSplit || loadedSplitStatus === "active"}
                       onClick={() => void activateSplit()}
-                      className="rounded-md bg-emerald-500 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
+                      className={
+                        "rounded-md px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50 " +
+                        (loadedSplitStatus === "active" ? "bg-amber-500" : "bg-emerald-500")
+                      }
                     >
                       {loadedSplitStatus === "active" ? "Ativo" : activatingSplit ? "Ativando..." : "Ativar split"}
                     </button>
