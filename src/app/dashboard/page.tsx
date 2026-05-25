@@ -69,12 +69,19 @@ export default function Dashboard() {
       amount_usd: number;
       status: string;
       created_at: string;
+      updated_at?: string;
+      sent_at?: string | null;
+      sent_ref?: string | null;
       correlation_id: string | null;
+      meta?: unknown;
       party: null | { id: string; display_name: string | null; email: string | null };
     }>
   >([]);
   const [loadingPayouts, setLoadingPayouts] = useState(false);
   const [payoutsErr, setPayoutsErr] = useState<string | null>(null);
+
+  const [payoutSentRefById, setPayoutSentRefById] = useState<Record<string, string>>({});
+  const [payoutUpdatingId, setPayoutUpdatingId] = useState<string | null>(null);
 
   const [applyingSplits, setApplyingSplits] = useState(false);
   const [applySplitsMsg, setApplySplitsMsg] = useState<string | null>(null);
@@ -554,6 +561,29 @@ export default function Dashboard() {
       setPayoutError(e instanceof Error ? e.message : "Erro ao solicitar payout");
     } finally {
       setPayoutBusyPartyId(null);
+    }
+  }
+
+  async function markPayoutSent(payout_id: string) {
+    if (!sessionToken) return;
+    setPayoutUpdatingId(payout_id);
+    setPayoutError(null);
+    try {
+      const sent_ref = (payoutSentRefById[payout_id] ?? "").trim();
+      const res = await fetch(`/api/payouts`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json", authorization: `Bearer ${sessionToken}` },
+        body: JSON.stringify({ payout_id, status: "SENT", sent_ref: sent_ref || undefined }),
+      });
+      const j = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      await refreshPayouts(sessionToken);
+      await refreshPartyBalances(sessionToken);
+      await refreshOverview(sessionToken);
+    } catch (e: unknown) {
+      setPayoutError(e instanceof Error ? e.message : "Erro ao marcar payout como SENT");
+    } finally {
+      setPayoutUpdatingId(null);
     }
   }
 
@@ -1050,6 +1080,7 @@ export default function Dashboard() {
                         <th className="px-3 py-2">Party</th>
                         <th className="px-3 py-2">Valor (USD)</th>
                         <th className="px-3 py-2">Status</th>
+                        <th className="px-3 py-2">Ação</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1063,6 +1094,34 @@ export default function Dashboard() {
                           <td className="px-3 py-2 font-semibold text-emerald-200">{usdFmt.format(Number(p.amount_usd ?? 0))}</td>
                           <td className="px-3 py-2">
                             <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] ring-1 ring-white/10">{p.status}</span>
+                          </td>
+                          <td className="px-3 py-2">
+                            {p.status === "APPROVED" ? (
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                <input
+                                  placeholder="ref (opcional)"
+                                  value={payoutSentRefById[p.id] ?? ""}
+                                  onChange={(e) =>
+                                    setPayoutSentRefById((cur) => ({
+                                      ...cur,
+                                      [p.id]: e.target.value,
+                                    }))
+                                  }
+                                  className="w-full rounded-md bg-white/10 px-2 py-1 text-xs text-slate-100 ring-1 ring-white/10 placeholder:text-slate-400 sm:w-[180px]"
+                                />
+                                <button
+                                  disabled={!sessionToken || payoutUpdatingId === p.id}
+                                  onClick={() => void markPayoutSent(p.id)}
+                                  className="rounded-md bg-emerald-300 px-3 py-1.5 text-xs font-semibold text-slate-900 disabled:opacity-50"
+                                >
+                                  {payoutUpdatingId === p.id ? "Salvando..." : "Marcar como SENT"}
+                                </button>
+                              </div>
+                            ) : p.status === "SENT" ? (
+                              <div className="text-[11px] text-slate-300">SENT {p.sent_ref ? `(${p.sent_ref})` : ""}</div>
+                            ) : (
+                              <div className="text-[11px] text-slate-400">—</div>
+                            )}
                           </td>
                         </tr>
                       ))}

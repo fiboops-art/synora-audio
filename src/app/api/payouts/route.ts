@@ -31,7 +31,9 @@ export async function GET(req: Request) {
 
     let q = service
       .from("payout_requests")
-      .select("id,party_id,amount_usd,status,created_at,correlation_id, party:parties(id,display_name,email)")
+      .select(
+        "id,party_id,amount_usd,status,created_at,updated_at,sent_at,sent_ref,correlation_id, meta, party:parties(id,display_name,email)"
+      )
       .eq("user_id", uid)
       .order("created_at", { ascending: false })
       .limit(limit);
@@ -41,6 +43,80 @@ export async function GET(req: Request) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     return NextResponse.json({ payouts: data ?? [] });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: errMsg(e) }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: Request) {
+  // Update payout status (MVP): mark as SENT/FAILED/CANCELED.
+  try {
+    const auth = req.headers.get("authorization") || "";
+    const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+    if (!token) return NextResponse.json({ error: "Missing Authorization" }, { status: 401 });
+
+    const body = (await req.json()) as {
+      payout_id?: string;
+      status?: "SENT" | "FAILED" | "CANCELED";
+      sent_ref?: string;
+      note?: string;
+    };
+    const payout_id = (body.payout_id ?? "").trim();
+    const nextStatus = body.status;
+    const sent_ref = (body.sent_ref ?? "").trim() || null;
+    const note = (body.note ?? "").trim() || null;
+    if (!payout_id) return NextResponse.json({ error: "Missing payout_id" }, { status: 400 });
+    if (!nextStatus) return NextResponse.json({ error: "Missing status" }, { status: 400 });
+
+    const service = getSupabaseService();
+    const { data: userData, error: userErr } = await service.auth.getUser(token);
+    if (userErr || !userData.user) return NextResponse.json({ error: "Invalid session" }, { status: 401 });
+    const uid = userData.user.id;
+
+    const { data: cur, error: curErr } = await service
+      .from("payout_requests")
+      .select("id,status")
+      .eq("user_id", uid)
+      .eq("id", payout_id)
+      .single();
+    if (curErr || !cur) return NextResponse.json({ error: "Payout not found" }, { status: 404 });
+
+    const currentStatus = String((cur as unknown as { status?: unknown }).status ?? "");
+    if (currentStatus !== "APPROVED" && currentStatus !== "SENT" && currentStatus !== "FAILED") {
+      return NextResponse.json(
+        { error: `Cannot update payout from status ${currentStatus}` },
+        { status: 400 }
+      );
+    }
+    // Idempotent transitions: SENT is terminal unless moving to FAILED with operator note (optional in MVP).
+    if (currentStatus === "SENT" && nextStatus !== "SENT") {
+      return NextResponse.json({ error: "Cannot change status after SENT" }, { status: 400 });
+    }
+
+    const patch: Record<string, unknown> = {
+      status: nextStatus,
+      updated_at: new Date().toISOString(),
+    };
+    if (nextStatus === "SENT") {
+      patch.sent_at = new Date().toISOString();
+      patch.sent_ref = sent_ref;
+    }
+    if (note) {
+      patch.meta = { note };
+    }
+
+    const { data: upd, error: updErr } = await service
+      .from("payout_requests")
+      .update(patch)
+      .eq("user_id", uid)
+      .eq("id", payout_id)
+      .select(
+        "id,party_id,amount_usd,status,created_at,updated_at,sent_at,sent_ref,correlation_id, meta, party:parties(id,display_name,email)"
+      )
+      .single();
+    if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
+
+    return NextResponse.json({ ok: true, payout: upd });
   } catch (e: unknown) {
     return NextResponse.json({ error: errMsg(e) }, { status: 500 });
   }

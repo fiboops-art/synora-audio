@@ -11,8 +11,16 @@ create table if not exists public.payout_requests (
   guardian_raw jsonb,
   correlation_id uuid,
   meta jsonb,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  sent_at timestamptz,
+  sent_ref text
 );
+
+-- Add missing columns if this migration was applied before (idempotent-ish)
+alter table public.payout_requests add column if not exists updated_at timestamptz not null default now();
+alter table public.payout_requests add column if not exists sent_at timestamptz;
+alter table public.payout_requests add column if not exists sent_ref text;
 
 create index if not exists payout_requests_user_created_idx on public.payout_requests (user_id, created_at desc);
 create index if not exists payout_requests_user_party_idx on public.payout_requests (user_id, party_id);
@@ -37,4 +45,3 @@ create policy "payout_requests_update_own"
   to authenticated
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
-
