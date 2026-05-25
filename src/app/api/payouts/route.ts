@@ -87,7 +87,7 @@ export async function PATCH(req: Request) {
 
     const { data: cur, error: curErr } = await service
       .from("payout_requests")
-      .select("id,status")
+      .select("id,status,payout_method,sent_ref,sent_at,sent_by")
       .eq("user_id", uid)
       .eq("id", payout_id)
       .single();
@@ -129,6 +129,21 @@ export async function PATCH(req: Request) {
       )
       .single();
     if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
+
+    // Audit trail
+    await service.from("payout_events").insert({
+      user_id: uid,
+      payout_id,
+      actor_id: uid,
+      action: "STATUS_CHANGED",
+      from_status: currentStatus,
+      to_status: nextStatus,
+      payload: {
+        payout_method,
+        sent_ref,
+        note,
+      },
+    });
 
     return NextResponse.json({ ok: true, payout: upd });
   } catch (e: unknown) {
@@ -280,6 +295,22 @@ export async function POST(req: Request) {
       .select("id,user_id,party_id,amount_usd,status,created_at,correlation_id")
       .single();
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
+
+    // Audit trail
+    await service.from("payout_events").insert({
+      user_id: uid,
+      payout_id: (payout as unknown as { id?: unknown }).id,
+      actor_id: uid,
+      action: "CREATED",
+      from_status: null,
+      to_status: status,
+      payload: {
+        party_id,
+        amount_usd,
+        memo,
+        guardian: { status: guardianDecision.status, risk_score: guardianDecision.risk_score, correlation_id },
+      },
+    });
 
     if (guardianDecision.status === "BLOCKED") {
       return NextResponse.json(
