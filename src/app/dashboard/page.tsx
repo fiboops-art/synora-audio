@@ -116,6 +116,40 @@ export default function Dashboard() {
   const payoutRefTooltip =
     "Identificador utilizado para comprovar e reconciliar o envio do payout (PIX E2E, transfer_id, tx_hash, payout_batch_id etc).";
 
+  // Payout audit trail modal
+  const [eventsPayoutId, setEventsPayoutId] = useState<string | null>(null);
+  const [eventsOpen, setEventsOpen] = useState(false);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [eventsErr, setEventsErr] = useState<string | null>(null);
+  const [events, setEvents] = useState<
+    Array<{ id: string; action: string; from_status: string | null; to_status: string | null; actor_id: string; created_at: string; payload: unknown }>
+  >([]);
+
+  const openPayoutEvents = useCallback(
+    async (payout_id: string) => {
+      if (!sessionToken) return;
+      setEventsPayoutId(payout_id);
+      setEventsOpen(true);
+      setLoadingEvents(true);
+      setEventsErr(null);
+      setEvents([]);
+      try {
+        const res = await fetch(`/api/payouts/events?payout_id=${encodeURIComponent(payout_id)}&limit=50`, {
+          headers: { authorization: `Bearer ${sessionToken}` },
+          cache: "no-store",
+        });
+        const j = (await res.json()) as { events?: unknown[]; error?: string };
+        if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+        setEvents((j.events ?? []) as typeof events);
+      } catch (e: unknown) {
+        setEventsErr(e instanceof Error ? e.message : "Erro ao carregar eventos");
+      } finally {
+        setLoadingEvents(false);
+      }
+    },
+    [sessionToken]
+  );
+
   function splitKnownPrefix(value: string): { prefixKey: string | null; rest: string } {
     const v = (value ?? "").trim();
     const m = v.match(/^([A-Z_]+):\s*(.*)$/);
@@ -1201,6 +1235,7 @@ export default function Dashboard() {
                         <th className="px-3 py-2">Valor (USD)</th>
                         <th className="px-3 py-2">Status</th>
                         <th className="px-3 py-2">Ação</th>
+                        <th className="px-3 py-2">Audit</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1313,6 +1348,16 @@ export default function Dashboard() {
                               <div className="text-[11px] text-slate-400">—</div>
                             )}
                           </td>
+                          <td className="px-3 py-2">
+                            <button
+                              type="button"
+                              disabled={!sessionToken}
+                              onClick={() => void openPayoutEvents(p.id)}
+                              className="rounded-md bg-white/10 px-3 py-1.5 text-xs font-semibold text-slate-100 ring-1 ring-white/10 hover:bg-white/15 disabled:opacity-50"
+                            >
+                              histórico
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1323,6 +1368,67 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {eventsOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-3xl overflow-hidden rounded-xl bg-slate-950 ring-1 ring-white/10">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+              <div>
+                <div className="text-sm font-semibold text-white">Payout — Audit trail</div>
+                <div className="text-xs text-slate-300">{eventsPayoutId}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEventsOpen(false);
+                  setEventsPayoutId(null);
+                }}
+                className="rounded-md bg-white/10 px-3 py-1.5 text-xs font-semibold text-slate-100 ring-1 ring-white/10 hover:bg-white/15"
+              >
+                fechar
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-auto p-4">
+              {loadingEvents ? (
+                <div className="text-sm text-slate-200/80">Carregando…</div>
+              ) : eventsErr ? (
+                <pre className="whitespace-pre-wrap rounded-md bg-red-500/10 p-3 text-xs text-red-200 ring-1 ring-red-500/20">{eventsErr}</pre>
+              ) : events.length === 0 ? (
+                <div className="text-sm text-slate-200/80">Nenhum evento.</div>
+              ) : (
+                <div className="space-y-2">
+                  {events
+                    .slice()
+                    .reverse()
+                    .map((ev) => (
+                      <div key={ev.id} className="rounded-md bg-white/5 p-3 ring-1 ring-white/10">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-xs font-semibold text-white">
+                            {ev.action}
+                            {ev.from_status || ev.to_status ? (
+                              <span className="ml-2 text-slate-300">
+                                {ev.from_status ?? "—"} → {ev.to_status ?? "—"}
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="text-[11px] text-slate-400">{new Date(ev.created_at).toLocaleString()}</div>
+                        </div>
+                        <div className="mt-1 text-[11px] text-slate-400">actor: {ev.actor_id}</div>
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-xs text-slate-300">payload</summary>
+                          <pre className="mt-2 max-h-[240px] overflow-auto whitespace-pre-wrap rounded-md bg-black/40 p-3 text-[11px] text-slate-100 ring-1 ring-white/10">
+                            {JSON.stringify(ev.payload ?? null, null, 2)}
+                          </pre>
+                        </details>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-6 syn-card-soft p-6">
         <div className="text-sm font-semibold text-white">Próximos passos (dev)</div>
