@@ -217,6 +217,20 @@ export default function Dashboard() {
   const [detailsEventsErr, setDetailsEventsErr] = useState<string | null>(null);
   const [detailsEvents, setDetailsEvents] = useState<typeof events>([]);
 
+  const [detailsSettlement, setDetailsSettlement] = useState<null | {
+    id: string;
+    payout_id: string;
+    destination_id: string;
+    operator_id: string;
+    provider: string;
+    settlement_ref: string;
+    status: string;
+    settled_at: string | null;
+    created_at: string;
+    correlation_id: string | null;
+    destination_masked?: unknown;
+  }>(null);
+
   const openPayoutDetails = useCallback(
     async (payout_id: string) => {
       if (!sessionToken) return;
@@ -225,6 +239,7 @@ export default function Dashboard() {
       setDetailsErr(null);
       setDetailsLoading(true);
       setDetailsPayout(null);
+      setDetailsSettlement(null);
       setDetailsEventsErr(null);
       setDetailsEventsLoading(true);
       setDetailsEvents([]);
@@ -247,6 +262,14 @@ export default function Dashboard() {
         const ej = (await eRes.json()) as { events?: unknown[]; error?: string };
         if (!eRes.ok) throw new Error(ej.error || `HTTP ${eRes.status}`);
         setDetailsEvents((ej.events ?? []) as typeof events);
+
+        const sRes = await fetch(`/api/payouts/${encodeURIComponent(payout_id)}/settlement`, {
+          headers: { authorization: `Bearer ${sessionToken}` },
+          cache: "no-store",
+        });
+        const sj = (await sRes.json()) as { settlement?: unknown; error?: string };
+        if (!sRes.ok) throw new Error(sj.error || `HTTP ${sRes.status}`);
+        setDetailsSettlement((sj.settlement ?? null) as typeof detailsSettlement);
       } catch (e: unknown) {
         setDetailsErr(e instanceof Error ? e.message : "Erro ao carregar detalhes");
       } finally {
@@ -1802,15 +1825,24 @@ export default function Dashboard() {
                     <div className="text-xs text-slate-300">Settlement info</div>
                     <div className="mt-2 grid gap-2 text-xs text-slate-100">
                       <div>
-                        <span className="text-slate-400">Method:</span> {detailsPayout.payout_method ? payoutMethodLabel[String(detailsPayout.payout_method)] ?? detailsPayout.payout_method : "—"}
+                        <span className="text-slate-400">Method:</span>{" "}
+                        {detailsSettlement?.provider
+                          ? payoutMethodLabel[String(detailsSettlement.provider)] ?? detailsSettlement.provider
+                          : detailsPayout.payout_method
+                            ? payoutMethodLabel[String(detailsPayout.payout_method)] ?? detailsPayout.payout_method
+                            : "—"}
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-slate-400">Proof:</span>
-                        <span className="truncate">{detailsPayout.sent_ref ?? "—"}</span>
-                        {detailsPayout.sent_ref ? (
+                        <span className="truncate">{detailsSettlement?.settlement_ref ?? detailsPayout.sent_ref ?? "—"}</span>
+                        {detailsSettlement?.settlement_ref || detailsPayout.sent_ref ? (
                           <button
                             type="button"
-                            onClick={() => void navigator.clipboard?.writeText(detailsPayout.sent_ref ?? "")}
+                            onClick={() =>
+                              void navigator.clipboard?.writeText(
+                                String(detailsSettlement?.settlement_ref ?? detailsPayout.sent_ref ?? "")
+                              )
+                            }
                             className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] text-slate-100 ring-1 ring-white/10 hover:bg-white/15"
                           >
                             copiar
@@ -1818,10 +1850,24 @@ export default function Dashboard() {
                         ) : null}
                       </div>
                       <div>
-                        <span className="text-slate-400">Settled at:</span> {detailsPayout.sent_at ? new Date(detailsPayout.sent_at).toLocaleString() : "—"}
+                        <span className="text-slate-400">Settled at:</span>{" "}
+                        {detailsSettlement?.settled_at
+                          ? new Date(detailsSettlement.settled_at).toLocaleString()
+                          : detailsPayout.sent_at
+                            ? new Date(detailsPayout.sent_at).toLocaleString()
+                            : "—"}
                       </div>
                       <div>
-                        <span className="text-slate-400">Operator:</span> {detailsPayout.sent_by ? (sessionUserId && detailsPayout.sent_by === sessionUserId ? "you" : String(detailsPayout.sent_by)) : "—"}
+                        <span className="text-slate-400">Operator:</span>{" "}
+                        {detailsSettlement?.operator_id
+                          ? sessionUserId && detailsSettlement.operator_id === sessionUserId
+                            ? "you"
+                            : String(detailsSettlement.operator_id)
+                          : detailsPayout.sent_by
+                            ? sessionUserId && detailsPayout.sent_by === sessionUserId
+                              ? "you"
+                              : String(detailsPayout.sent_by)
+                            : "—"}
                       </div>
                     </div>
                   </div>
