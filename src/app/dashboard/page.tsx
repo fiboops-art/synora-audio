@@ -341,6 +341,30 @@ export default function Dashboard() {
     return s || "—";
   }
 
+  function formatDestinationMasked(x: unknown): string {
+    if (!x || typeof x !== "object") return "—";
+    const o = x as Record<string, unknown>;
+    const provider = String(o.provider ?? "");
+    const label = String(o.label ?? "");
+    const dm = (o.details_masked ?? null) as null | Record<string, unknown>;
+    if (!provider) return label || "—";
+
+    if (provider === "PIX") {
+      const masked = String(dm?.pix_key_masked ?? "");
+      const name = String(dm?.receiver_name ?? "");
+      const bits = [masked || label, name].filter((s) => s && s !== "null" && s !== "undefined");
+      return `PIX • ${bits.join(" • ")}`;
+    }
+    if (provider === "BANK") {
+      const bank = String(dm?.bank ?? "");
+      const last4 = String(dm?.account_last4 ?? "");
+      const bits = [bank || label, last4 ? `Conta ****${last4}` : ""].filter(Boolean);
+      return `BANK • ${bits.join(" • ")}`;
+    }
+    // generic
+    return `${provider} • ${label || "—"}`;
+  }
+
   const [applyingSplits, setApplyingSplits] = useState(false);
   const [applySplitsMsg, setApplySplitsMsg] = useState<string | null>(null);
   const [applySplitsErr, setApplySplitsErr] = useState<string | null>(null);
@@ -1831,6 +1855,12 @@ export default function Dashboard() {
                           : detailsPayout.payout_method
                             ? payoutMethodLabel[String(detailsPayout.payout_method)] ?? detailsPayout.payout_method
                             : "—"}
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Destination:</span>{" "}
+                        {detailsSettlement?.destination_masked
+                          ? formatDestinationMasked(detailsSettlement.destination_masked)
+                          : "—"}
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-slate-400">Proof:</span>
