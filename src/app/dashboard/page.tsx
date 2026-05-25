@@ -87,6 +87,41 @@ export default function Dashboard() {
   const [payoutUpdatingId, setPayoutUpdatingId] = useState<string | null>(null);
   const [payoutRowErrById, setPayoutRowErrById] = useState<Record<string, { message: string; duplicate_payout_id?: string | null }>>({});
 
+  // Phase 2: payout destinations + manual settlements (PIX/BANK first)
+  const [destinations, setDestinations] = useState<
+    Array<{
+      id: string;
+      party_id: string;
+      provider: string;
+      label: string;
+      currency: string;
+      status: string;
+      verified_at: string | null;
+      verified_by: string | null;
+      fingerprint: string | null;
+      details_masked?: unknown;
+      created_at: string;
+    }>
+  >([]);
+  const [loadingDestinations, setLoadingDestinations] = useState(false);
+  const [destinationsErr, setDestinationsErr] = useState<string | null>(null);
+
+  // Destination creation (MVP UI)
+  const [destPartyId, setDestPartyId] = useState<string>("");
+  const [destProvider, setDestProvider] = useState<"PIX" | "BANK">("PIX");
+  const [destLabel, setDestLabel] = useState<string>("");
+  const [destCurrency, setDestCurrency] = useState<string>("BRL");
+  const [destPixKeyType, setDestPixKeyType] = useState<string>("email");
+  const [destPixKey, setDestPixKey] = useState<string>("");
+  const [destReceiverName, setDestReceiverName] = useState<string>("");
+  const [creatingDestination, setCreatingDestination] = useState(false);
+  const [destinationActionErr, setDestinationActionErr] = useState<string | null>(null);
+
+  // Settle (new path) state
+  const [settleDestinationByPayoutId, setSettleDestinationByPayoutId] = useState<Record<string, string>>({});
+  const [settleRefByPayoutId, setSettleRefByPayoutId] = useState<Record<string, string>>({});
+  const [settlingPayoutId, setSettlingPayoutId] = useState<string | null>(null);
+
   const [payoutsStatusFilter, setPayoutsStatusFilter] = useState<string>("all");
   const [payoutsMethodFilter, setPayoutsMethodFilter] = useState<string>("all");
   const [payoutsSearch, setPayoutsSearch] = useState<string>("");
@@ -509,12 +544,51 @@ export default function Dashboard() {
     }
   }, []);
 
+  const refreshDestinations = useCallback(async (token: string) => {
+    setLoadingDestinations(true);
+    setDestinationsErr(null);
+    try {
+      const res = await fetch(`/api/payout-destinations?limit=200`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const j = (await res.json()) as { destinations?: unknown[]; error?: string };
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setDestinations((j.destinations ?? []) as typeof destinations);
+    } catch (e: unknown) {
+      setDestinationsErr(e instanceof Error ? e.message : "Erro ao carregar destinations");
+    } finally {
+      setLoadingDestinations(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!sessionToken) return;
     void (async () => {
       await refreshPayouts(sessionToken);
+      await refreshDestinations(sessionToken);
     })();
-  }, [sessionToken, refreshPayouts]);
+  }, [sessionToken, refreshPayouts, refreshDestinations]);
+
+  const destinationsByParty = useMemo(() => {
+    const map = new Map<string, typeof destinations>();
+    for (const d of destinations) {
+      const pid = String((d as { party_id?: unknown }).party_id ?? "");
+      if (!pid) continue;
+      const arr = map.get(pid) ?? [];
+      arr.push(d);
+      map.set(pid, arr);
+    }
+    return map;
+  }, [destinations]);
+
+  const verifiedDestinationsForParty = useCallback(
+    (party_id: string) => {
+      const arr = destinationsByParty.get(party_id) ?? [];
+      return arr.filter((d) => d.status === "VERIFIED" && (d.provider === "PIX" || d.provider === "BANK"));
+    },
+    [destinationsByParty]
+  );
 
   const applySplitsToLedger = useCallback(async () => {
     if (!sessionToken) return;
@@ -806,6 +880,102 @@ export default function Dashboard() {
       return hay.includes(q);
     });
   }, [payouts, payoutsSearch, payoutsStatusFilter, payoutsMethodFilter]);
+
+  async function createDestination() {
+    if (!sessionToken) return;
+    setCreatingDestination(true);
+    setDestinationActionErr(null);
+    try {
+      if (!destPartyId) throw new Error("Selecione uma Party");
+      if (!destLabel.trim()) throw new Error("Informe um label");
+
+      const details: Record<string, unknown> =
+        destProvider === "PIX"
+          ? {
+              pix_key_type: destPixKeyType,
+              pix_key: destPixKey.trim(),
+              receiver_name: destReceiverName.trim() || null,
+            }
+          : {};
+
+      if (destProvider === "PIX" && !String(details.pix_key ?? "").trim()) throw new Error("Informe a chave PIX");
+
+      const res = await fetch(`/api/payout-destinations`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${sessionToken}` },
+        body: JSON.stringify({
+          party_id: destPartyId,
+          provider: destProvider,
+          label: destLabel.trim(),
+          currency: (destCurrency || "BRL").trim().toUpperCase(),
+          details,
+        }),
+      });
+      const j = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+
+      setDestLabel("");
+      setDestPixKey("");
+      setDestReceiverName("");
+      await refreshDestinations(sessionToken);
+    } catch (e: unknown) {
+      setDestinationActionErr(e instanceof Error ? e.message : "Erro ao criar destination");
+    } finally {
+      setCreatingDestination(false);
+    }
+  }
+
+  async function verifyDestination(id: string) {
+    if (!sessionToken) return;
+    setDestinationActionErr(null);
+    try {
+      const res = await fetch(`/api/payout-destinations/${encodeURIComponent(id)}/verify`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${sessionToken}` },
+      });
+      const j = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      await refreshDestinations(sessionToken);
+    } catch (e: unknown) {
+      setDestinationActionErr(e instanceof Error ? e.message : "Erro ao verificar destination");
+    }
+  }
+
+  async function settlePayout(payout_id: string, party_id: string) {
+    if (!sessionToken) return;
+    setSettlingPayoutId(payout_id);
+    setPayoutRowErrById((cur) => {
+      const next = { ...cur };
+      delete next[payout_id];
+      return next;
+    });
+    try {
+      const destination_id = (settleDestinationByPayoutId[payout_id] ?? "").trim();
+      const settlement_ref = (settleRefByPayoutId[payout_id] ?? "").trim();
+      if (!destination_id) throw new Error("Selecione um destination VERIFIED");
+      if (!settlement_ref) throw new Error("Informe o comprovante (E2E/TXID/NSU/etc)");
+
+      const okDest = verifiedDestinationsForParty(party_id).some((d) => d.id === destination_id);
+      if (!okDest) throw new Error("Destination inválido para esta party");
+
+      const res = await fetch(`/api/payouts/${encodeURIComponent(payout_id)}/settle`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${sessionToken}` },
+        body: JSON.stringify({ destination_id, settlement_ref }),
+      });
+      const j = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+
+      await refreshPayouts(sessionToken);
+      await refreshPartyBalances(sessionToken);
+      await refreshOverview(sessionToken);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Erro ao liquidar payout";
+      setPayoutRowErrById((cur) => ({ ...cur, [payout_id]: { message: msg } }));
+    } finally {
+      setSettlingPayoutId(null);
+    }
+  }
 
   async function createParty() {
     if (!sessionToken) return;
@@ -1367,92 +1537,59 @@ export default function Dashboard() {
                           </td>
                           <td className="px-3 py-2">
                             {p.status === "APPROVED" ? (
-                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                <select
-                                  value={payoutMethodById[p.id] ?? ""}
-                                  onChange={(e) => {
-                                    const method = e.target.value;
-                                    setPayoutMethodById((cur) => ({ ...cur, [p.id]: method }));
-                                    const prefix = payoutMethodPrefix[method] ?? "";
-                                    if (!prefix) return;
-                                    setPayoutSentRefById((cur) => {
-                                      const existing = String(cur[p.id] ?? "");
-                                      const { prefixKey, rest } = splitKnownPrefix(existing);
+                              verifiedDestinationsForParty(p.party_id).length ? (
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                  <select
+                                    value={settleDestinationByPayoutId[p.id] ?? ""}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      setSettleDestinationByPayoutId((cur) => ({ ...cur, [p.id]: v }));
+                                      const dest = verifiedDestinationsForParty(p.party_id).find((d) => d.id === v);
+                                      const prov = String(dest?.provider ?? "");
+                                      const px = prov ? `${prov}: ` : "";
+                                      if (px) {
+                                        setSettleRefByPayoutId((cur) => {
+                                          const existing = String(cur[p.id] ?? "");
+                                          const { prefixKey, rest } = splitKnownPrefix(existing);
+                                          if (!rest) return { ...cur, [p.id]: px };
+                                          if (prefixKey && `${prefixKey}: ` === px) return cur;
+                                          return { ...cur, [p.id]: px + rest };
+                                        });
+                                      }
+                                    }}
+                                    className="syn-select h-8 px-2 text-xs sm:w-[220px]"
+                                    title="Destination VERIFIED"
+                                  >
+                                    <option value="">destination…</option>
+                                    {verifiedDestinationsForParty(p.party_id).map((d) => (
+                                      <option key={d.id} value={d.id}>
+                                        {d.provider} • {d.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <input
+                                    placeholder="Cole comprovante (E2E/TXID/NSU/etc)"
+                                    value={settleRefByPayoutId[p.id] ?? ""}
+                                    onChange={(e) => setSettleRefByPayoutId((cur) => ({ ...cur, [p.id]: e.target.value }))}
+                                    className="w-full rounded-md bg-white/10 px-2 py-1 text-xs text-slate-100 ring-1 ring-white/10 placeholder:text-slate-400 sm:w-[240px]"
+                                  />
+                                  <button
+                                    disabled={!sessionToken || settlingPayoutId === p.id || !(settleDestinationByPayoutId[p.id] ?? "").trim() || !(settleRefByPayoutId[p.id] ?? "").trim()}
+                                    onClick={() => void settlePayout(p.id, p.party_id)}
+                                    className="rounded-md bg-emerald-300 px-3 py-1.5 text-xs font-semibold text-slate-900 disabled:opacity-50"
+                                  >
+                                    {settlingPayoutId === p.id ? "Liquidando..." : "Liquidar (SETTLE)"}
+                                  </button>
 
-                                      // If user only had a prefix (PIX:) or empty, just set the new prefix.
-                                      if (!rest) return { ...cur, [p.id]: prefix };
-
-                                      // If it already has the same prefix, keep as-is.
-                                      if (prefixKey && payoutMethodPrefix[prefixKey] === prefix) return cur;
-
-                                      // If it had another known prefix, replace it with the new prefix and preserve the identifier part.
-                                      if (prefixKey) return { ...cur, [p.id]: prefix + rest };
-
-                                      // If it had no known prefix, assume the existing value is the identifier.
-                                      return { ...cur, [p.id]: prefix + rest };
-                                    });
-                                  }}
-                                  className="syn-select h-8 px-2 text-xs sm:w-[190px]"
-                                  title="Método de pagamento"
-                                >
-                                  <option value="">método…</option>
-                                  {payoutMethods.map((m) => (
-                                    <option key={m} value={m}>
-                                      {payoutMethodLabel[m]}
-                                    </option>
-                                  ))}
-                                </select>
-                                <input
-                                  placeholder={
-                                    (payoutMethodById[p.id] ?? "").trim()
-                                      ? payoutRefPlaceholder((payoutMethodById[p.id] ?? "").trim())
-                                      : "ref/comprovante"
-                                  }
-                                  value={payoutSentRefById[p.id] ?? ""}
-                                  onChange={(e) =>
-                                    setPayoutSentRefById((cur) => ({
-                                      ...cur,
-                                      [p.id]: e.target.value,
-                                    }))
-                                  }
-                                  title={payoutRefTooltip}
-                                  className="w-full rounded-md bg-white/10 px-2 py-1 text-xs text-slate-100 ring-1 ring-white/10 placeholder:text-slate-400 sm:w-[220px]"
-                                />
-                                <button
-                                  disabled={
-                                    !sessionToken ||
-                                    payoutUpdatingId === p.id ||
-                                    !(payoutSentRefById[p.id] ?? "").trim() ||
-                                    !(payoutMethodById[p.id] ?? "").trim() ||
-                                    ((): boolean => {
-                                      const m = (payoutMethodById[p.id] ?? "").trim();
-                                      const v = (payoutSentRefById[p.id] ?? "").trim();
-                                      const px = payoutMethodPrefix[m] ?? "";
-                                      return !!px && v === px.trim();
-                                    })()
-                                  }
-                                  onClick={() => void markPayoutSent(p.id)}
-                                  className="rounded-md bg-emerald-300 px-3 py-1.5 text-xs font-semibold text-slate-900 disabled:opacity-50"
-                                >
-                                  {payoutUpdatingId === p.id ? "Salvando..." : "Marcar como SENT"}
-                                </button>
-
-                                {payoutRowErrById[p.id]?.message ? (
-                                  <div className="text-[11px] text-red-200/90">
-                                    {payoutRowErrById[p.id]?.message}
-                                    {payoutRowErrById[p.id]?.duplicate_payout_id ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => void openPayoutEvents(String(payoutRowErrById[p.id]!.duplicate_payout_id))}
-                                        className="ml-2 rounded-md bg-white/10 px-2 py-0.5 text-[11px] text-slate-100 ring-1 ring-white/10 hover:bg-white/15"
-                                        title="Abrir audit trail do payout duplicado"
-                                      >
-                                        ver duplicado
-                                      </button>
-                                    ) : null}
-                                  </div>
-                                ) : null}
-                              </div>
+                                  {payoutRowErrById[p.id]?.message ? (
+                                    <div className="text-[11px] text-red-200/90">
+                                      {payoutRowErrById[p.id]?.message}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ) : (
+                                <div className="text-[11px] text-slate-300">Crie/verifique um destination para liquidar.</div>
+                              )
                             ) : p.status === "SENT" ? (
                               <div className="space-y-1 text-[11px] text-slate-300">
                                 <div>
@@ -1930,6 +2067,149 @@ export default function Dashboard() {
                         <td className="px-3 py-2 text-slate-100">{p.display_name}</td>
                         <td className="px-3 py-2 text-slate-300">{p.kind}</td>
                         <td className="px-3 py-2 text-slate-300">{p.email ?? "—"}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 syn-card p-6">
+        <div className="text-sm font-semibold text-white">Payout Destinations (Fase 2) — PIX/BANK</div>
+        <div className="mt-1 text-sm text-slate-200/90">Cadastre destinos reutilizáveis e verifique manualmente (MVP).</div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-md bg-black/30 p-4 ring-1 ring-white/10">
+            <div className="text-xs text-slate-300">Criar destination</div>
+
+            <div className="mt-2">
+              <select value={destPartyId} onChange={(e) => setDestPartyId(e.target.value)} className="syn-select w-full px-3">
+                <option value="">Party…</option>
+                {parties.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.display_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <select value={destProvider} onChange={(e) => setDestProvider(e.target.value as "PIX" | "BANK")} className="syn-select">
+                <option value="PIX">PIX</option>
+                <option value="BANK" disabled>
+                  BANK (em breve)
+                </option>
+              </select>
+              <input
+                value={destCurrency}
+                onChange={(e) => setDestCurrency(e.target.value)}
+                placeholder="Moeda (ex: BRL)"
+                className="rounded-md bg-white/10 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10"
+              />
+            </div>
+
+            <div className="mt-2">
+              <input
+                value={destLabel}
+                onChange={(e) => setDestLabel(e.target.value)}
+                placeholder='Label (ex: "PIX Claudio")'
+                className="w-full rounded-md bg-white/10 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10"
+              />
+            </div>
+
+            {destProvider === "PIX" ? (
+              <div className="mt-2 grid gap-2">
+                <div className="grid gap-2 sm:grid-cols-[160px_1fr]">
+                  <select value={destPixKeyType} onChange={(e) => setDestPixKeyType(e.target.value)} className="syn-select">
+                    <option value="email">email</option>
+                    <option value="cpf">cpf</option>
+                    <option value="cnpj">cnpj</option>
+                    <option value="phone">phone</option>
+                    <option value="random">random</option>
+                  </select>
+                  <input
+                    value={destPixKey}
+                    onChange={(e) => setDestPixKey(e.target.value)}
+                    placeholder="Chave PIX"
+                    className="rounded-md bg-white/10 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10"
+                  />
+                </div>
+                <input
+                  value={destReceiverName}
+                  onChange={(e) => setDestReceiverName(e.target.value)}
+                  placeholder="Nome do recebedor (opcional)"
+                  className="rounded-md bg-white/10 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10"
+                />
+              </div>
+            ) : null}
+
+            <div className="mt-3">
+              <button
+                disabled={!sessionToken || creatingDestination}
+                onClick={() => void createDestination()}
+                className="rounded-md bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-50"
+              >
+                {creatingDestination ? "Criando..." : "Criar destination"}
+              </button>
+            </div>
+            {destinationActionErr ? <div className="mt-2 text-xs text-red-200">{destinationActionErr}</div> : null}
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between">
+              <div className="text-xs text-slate-300">Destinations recentes</div>
+              <button
+                disabled={!sessionToken || loadingDestinations}
+                onClick={() => sessionToken && void refreshDestinations(sessionToken)}
+                className="text-xs text-slate-200 hover:text-white disabled:opacity-50"
+              >
+                {loadingDestinations ? "Atualizando..." : "Atualizar"}
+              </button>
+            </div>
+            {destinationsErr ? <div className="mt-2 text-xs text-red-200">{destinationsErr}</div> : null}
+            <div className="mt-2 overflow-hidden rounded-md ring-1 ring-white/10">
+              <table className="w-full text-left text-xs text-slate-200/90">
+                <thead className="bg-white/5 text-slate-200">
+                  <tr>
+                    <th className="px-3 py-2">Party</th>
+                    <th className="px-3 py-2">Provider</th>
+                    <th className="px-3 py-2">Label</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Ação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {destinations.length === 0 ? (
+                    <tr>
+                      <td className="px-3 py-3 text-slate-300" colSpan={5}>
+                        Nenhum destination ainda.
+                      </td>
+                    </tr>
+                  ) : (
+                    destinations.slice(0, 12).map((d) => (
+                      <tr key={d.id} className="border-t border-white/10">
+                        <td className="px-3 py-2 text-slate-100">
+                          {parties.find((p) => p.id === d.party_id)?.display_name ?? d.party_id.slice(0, 8)}
+                        </td>
+                        <td className="px-3 py-2 text-slate-300">{d.provider}</td>
+                        <td className="px-3 py-2 text-slate-300">{d.label}</td>
+                        <td className="px-3 py-2 text-slate-300">{d.status}</td>
+                        <td className="px-3 py-2">
+                          {d.status !== "VERIFIED" ? (
+                            <button
+                              disabled={!sessionToken}
+                              onClick={() => void verifyDestination(d.id)}
+                              className="rounded-md bg-amber-300 px-3 py-1.5 text-xs font-semibold text-slate-900 disabled:opacity-50"
+                            >
+                              verificar
+                            </button>
+                          ) : (
+                            <span className="text-[11px] text-emerald-200">VERIFIED</span>
+                          )}
+                        </td>
                       </tr>
                     ))
                   )}
