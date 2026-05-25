@@ -175,6 +175,11 @@ export default function Dashboard() {
 
   const sessionUserId = useMemo(() => jwtSub(sessionToken), [sessionToken]);
 
+  function actorLabel(actor_id: string) {
+    if (sessionUserId && actor_id === sessionUserId) return "you";
+    return String(actor_id).slice(0, 8);
+  }
+
   const [applyingSplits, setApplyingSplits] = useState(false);
   const [applySplitsMsg, setApplySplitsMsg] = useState<string | null>(null);
   const [applySplitsErr, setApplySplitsErr] = useState<string | null>(null);
@@ -1414,7 +1419,16 @@ export default function Dashboard() {
                           </div>
                           <div className="text-[11px] text-slate-400">{new Date(ev.created_at).toLocaleString()}</div>
                         </div>
-                        <div className="mt-1 text-[11px] text-slate-400">actor: {ev.actor_id}</div>
+                        <div className="mt-1 text-[11px] text-slate-400">actor: {actorLabel(ev.actor_id)}</div>
+
+                        {ev.action === "STATUS_CHANGED" && ev.to_status === "SENT" && ev.payload && typeof ev.payload === "object" ? (
+                          <div className="mt-2 text-[11px] text-slate-200/90">
+                            <span className="rounded-full bg-white/10 px-2 py-0.5 ring-1 ring-white/10">
+                              {String((ev.payload as { payout_method?: unknown }).payout_method ?? "—")}
+                            </span>
+                            <span className="ml-2 text-slate-300">{String((ev.payload as { sent_ref?: unknown }).sent_ref ?? "—")}</span>
+                          </div>
+                        ) : null}
                         <details className="mt-2">
                           <summary className="cursor-pointer text-xs text-slate-300">payload</summary>
                           <pre className="mt-2 max-h-[240px] overflow-auto whitespace-pre-wrap rounded-md bg-black/40 p-3 text-[11px] text-slate-100 ring-1 ring-white/10">
