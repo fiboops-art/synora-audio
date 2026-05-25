@@ -12,6 +12,7 @@ create table if not exists public.payout_destinations (
   label text not null,
   currency text not null default 'USD',
   details jsonb not null default '{}'::jsonb,
+  details_masked jsonb,
   fingerprint text,
   status text not null default 'DRAFT', -- DRAFT | PENDING_VERIFICATION | VERIFIED | DISABLED
 
@@ -21,6 +22,8 @@ create table if not exists public.payout_destinations (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.payout_destinations add column if not exists details_masked jsonb;
 
 -- Guardrails
 alter table public.payout_destinations
@@ -76,4 +79,3 @@ create policy "payout_destinations_update_own"
   to authenticated
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
-

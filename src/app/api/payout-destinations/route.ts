@@ -36,7 +36,9 @@ export async function GET(req: Request) {
 
     let q = service
       .from("payout_destinations")
-      .select("id,party_id,provider,label,currency,status,verified_at,verified_by,created_at,updated_at,fingerprint,details")
+      .select(
+        "id,party_id,provider,label,currency,status,verified_at,verified_by,created_at,updated_at,fingerprint,details_masked"
+      )
       .eq("user_id", uid)
       .order("created_at", { ascending: false })
       .limit(limit);
@@ -47,15 +49,7 @@ export async function GET(req: Request) {
     const { data, error } = await q;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    // Return a masked view for UI (keep raw details server-side only).
-    const destinations = (data ?? []).map((d) => {
-      const prov = String((d as { provider?: unknown }).provider ?? "") as DestinationProvider;
-      const details = cleanDetails((d as { details?: unknown }).details);
-      return {
-        ...d,
-        details_masked: maskDestination(prov, details),
-      };
-    });
+    const destinations = (data ?? []) as unknown[];
 
     return NextResponse.json({ destinations });
   } catch (e: unknown) {
@@ -102,6 +96,8 @@ export async function POST(req: Request) {
 
     const fingerprint = computeDestinationFingerprint(provider, details);
 
+    const details_masked = maskDestination(provider, details);
+
     const { data: dest, error: insErr } = await service
       .from("payout_destinations")
       .insert({
@@ -111,17 +107,16 @@ export async function POST(req: Request) {
         label,
         currency,
         details,
+        details_masked,
         fingerprint,
         status: "DRAFT",
       })
-      .select("id,party_id,provider,label,currency,status,verified_at,verified_by,created_at,updated_at,fingerprint,details")
+      .select("id,party_id,provider,label,currency,status,verified_at,verified_by,created_at,updated_at,fingerprint,details_masked")
       .single();
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
 
-    const details_masked = maskDestination(provider, details);
-    return NextResponse.json({ ok: true, destination: { ...dest, details_masked } });
+    return NextResponse.json({ ok: true, destination: dest });
   } catch (e: unknown) {
     return NextResponse.json({ error: errMsg(e) }, { status: 500 });
   }
 }
-

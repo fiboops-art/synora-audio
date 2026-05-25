@@ -114,6 +114,7 @@ export default function Dashboard() {
   const [destPixKeyType, setDestPixKeyType] = useState<string>("email");
   const [destPixKey, setDestPixKey] = useState<string>("");
   const [destReceiverName, setDestReceiverName] = useState<string>("");
+  const [destPixKeyErr, setDestPixKeyErr] = useState<string | null>(null);
   const [destBankName, setDestBankName] = useState<string>("");
   const [destBankBranch, setDestBankBranch] = useState<string>("");
   const [destBankAccount, setDestBankAccount] = useState<string>("");
@@ -990,6 +991,7 @@ export default function Dashboard() {
       setDestLabel("");
       setDestPixKey("");
       setDestReceiverName("");
+      setDestPixKeyErr(null);
       setDestBankName("");
       setDestBankBranch("");
       setDestBankAccount("");
@@ -2236,11 +2238,42 @@ export default function Dashboard() {
                   </select>
                   <input
                     value={destPixKey}
-                    onChange={(e) => setDestPixKey(e.target.value)}
-                    placeholder="Chave PIX"
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setDestPixKey(v);
+                      // minimal validations (MVP)
+                      const t = String(destPixKeyType || "");
+                      const vv = v.trim();
+                      let err: string | null = null;
+                      if (!vv) err = null;
+                      else if (t === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(vv)) err = "Email inválido";
+                      else if (t === "cpf" && vv.replace(/\D/g, "").length !== 11) err = "CPF deve ter 11 dígitos";
+                      else if (t === "cnpj" && vv.replace(/\D/g, "").length !== 14) err = "CNPJ deve ter 14 dígitos";
+                      else if (t === "phone" && !/^\+\d{10,15}$/.test(vv.replace(/[\s()-]/g, ""))) err = "Use formato +55XXXXXXXXXXX";
+                      else if (t === "random" && vv.length < 16) err = "Chave aleatória muito curta";
+                      setDestPixKeyErr(err);
+                    }}
+                    placeholder={
+                      destPixKeyType === "email"
+                        ? "email@empresa.com"
+                        : destPixKeyType === "cpf"
+                          ? "000.000.000-00"
+                          : destPixKeyType === "cnpj"
+                            ? "00.000.000/0000-00"
+                            : destPixKeyType === "phone"
+                              ? "+55 48 99999-9999"
+                              : destPixKeyType === "random"
+                                ? "Cole a chave aleatória PIX"
+                                : "Chave PIX"
+                    }
                     className="rounded-md bg-white/10 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10"
                   />
                 </div>
+
+                <div className="text-[11px] text-slate-300">
+                  Destino mascarado: {destPixKey.trim() ? `PIX • ${destPixKey.trim().slice(0, 3)}***${destPixKey.trim().slice(-3)}` : "—"}
+                </div>
+                {destPixKeyErr ? <div className="text-[11px] text-red-200">{destPixKeyErr}</div> : null}
                 <input
                   value={destReceiverName}
                   onChange={(e) => setDestReceiverName(e.target.value)}
