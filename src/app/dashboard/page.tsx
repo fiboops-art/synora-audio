@@ -85,6 +85,7 @@ export default function Dashboard() {
   const [payoutSentRefById, setPayoutSentRefById] = useState<Record<string, string>>({});
   const [payoutMethodById, setPayoutMethodById] = useState<Record<string, string>>({});
   const [payoutUpdatingId, setPayoutUpdatingId] = useState<string | null>(null);
+  const [payoutRowErrById, setPayoutRowErrById] = useState<Record<string, { message: string; duplicate_payout_id?: string | null }>>({});
 
   const [payoutsStatusFilter, setPayoutsStatusFilter] = useState<string>("all");
   const [payoutsMethodFilter, setPayoutsMethodFilter] = useState<string>("all");
@@ -665,6 +666,11 @@ export default function Dashboard() {
     if (!sessionToken) return;
     setPayoutUpdatingId(payout_id);
     setPayoutError(null);
+    setPayoutRowErrById((cur) => {
+      const next = { ...cur };
+      delete next[payout_id];
+      return next;
+    });
     try {
       const method = (payoutMethodById[payout_id] ?? "").trim();
       if (!method) throw new Error("Selecione o método de pagamento");
@@ -677,13 +683,18 @@ export default function Dashboard() {
         headers: { "content-type": "application/json", authorization: `Bearer ${sessionToken}` },
         body: JSON.stringify({ payout_id, status: "SENT", payout_method: method, sent_ref: sent_ref || undefined }),
       });
-      const j = (await res.json()) as { ok?: boolean; error?: string };
-      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      const j = (await res.json()) as { ok?: boolean; error?: string; duplicate_payout_id?: string | null };
+      if (!res.ok) {
+        const msg = j.error || `HTTP ${res.status}`;
+        setPayoutRowErrById((cur) => ({ ...cur, [payout_id]: { message: msg, duplicate_payout_id: j.duplicate_payout_id ?? null } }));
+        throw new Error(msg);
+      }
       await refreshPayouts(sessionToken);
       await refreshPartyBalances(sessionToken);
       await refreshOverview(sessionToken);
     } catch (e: unknown) {
-      setPayoutError(e instanceof Error ? e.message : "Erro ao marcar payout como SENT");
+      // Keep global error for unexpected issues, but prefer inline row errors.
+      if (!(e instanceof Error)) setPayoutError("Erro ao marcar payout como SENT");
     } finally {
       setPayoutUpdatingId(null);
     }
@@ -1322,6 +1333,22 @@ export default function Dashboard() {
                                 >
                                   {payoutUpdatingId === p.id ? "Salvando..." : "Marcar como SENT"}
                                 </button>
+
+                                {payoutRowErrById[p.id]?.message ? (
+                                  <div className="text-[11px] text-red-200/90">
+                                    {payoutRowErrById[p.id]?.message}
+                                    {payoutRowErrById[p.id]?.duplicate_payout_id ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => void openPayoutEvents(String(payoutRowErrById[p.id]!.duplicate_payout_id))}
+                                        className="ml-2 rounded-md bg-white/10 px-2 py-0.5 text-[11px] text-slate-100 ring-1 ring-white/10 hover:bg-white/15"
+                                        title="Abrir audit trail do payout duplicado"
+                                      >
+                                        ver duplicado
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                ) : null}
                               </div>
                             ) : p.status === "SENT" ? (
                               <div className="space-y-1 text-[11px] text-slate-300">
