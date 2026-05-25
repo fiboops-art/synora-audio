@@ -74,6 +74,10 @@ export async function PATCH(req: Request) {
     if (nextStatus === "SENT") {
       if (!sent_ref) return NextResponse.json({ error: "sent_ref é obrigatório para marcar como SENT" }, { status: 400 });
       if (!payout_method) return NextResponse.json({ error: "payout_method é obrigatório para marcar como SENT" }, { status: 400 });
+      // Guard against saving prefix-only references like "WISE:".
+      if (/^[A-Z_]+:\s*$/.test(sent_ref)) {
+        return NextResponse.json({ error: "sent_ref inválido: complete o identificador após o prefixo" }, { status: 400 });
+      }
     }
 
     const service = getSupabaseService();

@@ -116,6 +116,21 @@ export default function Dashboard() {
   const payoutRefTooltip =
     "Identificador utilizado para comprovar e reconciliar o envio do payout (PIX E2E, transfer_id, tx_hash, payout_batch_id etc).";
 
+  function jwtSub(token: string | null): string | null {
+    try {
+      if (!token) return null;
+      const parts = token.split(".");
+      if (parts.length < 2) return null;
+      const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+      const json = JSON.parse(atob(payload));
+      return typeof json?.sub === "string" ? json.sub : null;
+    } catch {
+      return null;
+    }
+  }
+
+  const sessionUserId = useMemo(() => jwtSub(sessionToken), [sessionToken]);
+
   const [applyingSplits, setApplyingSplits] = useState(false);
   const [applySplitsMsg, setApplySplitsMsg] = useState<string | null>(null);
   const [applySplitsErr, setApplySplitsErr] = useState<string | null>(null);
@@ -606,6 +621,8 @@ export default function Dashboard() {
       if (!method) throw new Error("Selecione o método de pagamento");
       const sent_ref = (payoutSentRefById[payout_id] ?? "").trim();
       if (!sent_ref) throw new Error("Informe uma referência (sent_ref) antes de marcar como SENT");
+      const prefix = payoutMethodPrefix[method] ?? "";
+      if (prefix && sent_ref === prefix.trim()) throw new Error("Complete o identificador após o prefixo");
       const res = await fetch(`/api/payouts`, {
         method: "PATCH",
         headers: { "content-type": "application/json", authorization: `Bearer ${sessionToken}` },
@@ -1202,6 +1219,7 @@ export default function Dashboard() {
                                       const existing = (cur[p.id] ?? "").trim();
                                       const hasKnownPrefix = payoutMethods.some((m) => existing.startsWith(payoutMethodPrefix[m]));
                                       if (!existing || hasKnownPrefix) return { ...cur, [p.id]: prefix };
+                                      // Preserve what user typed (assume it's the identifier) and just ensure prefix.
                                       return existing.startsWith(prefix) ? cur : { ...cur, [p.id]: prefix + existing };
                                     });
                                   }}
@@ -1232,7 +1250,13 @@ export default function Dashboard() {
                                     !sessionToken ||
                                     payoutUpdatingId === p.id ||
                                     !(payoutSentRefById[p.id] ?? "").trim() ||
-                                    !(payoutMethodById[p.id] ?? "").trim()
+                                    !(payoutMethodById[p.id] ?? "").trim() ||
+                                    ((): boolean => {
+                                      const m = (payoutMethodById[p.id] ?? "").trim();
+                                      const v = (payoutSentRefById[p.id] ?? "").trim();
+                                      const px = payoutMethodPrefix[m] ?? "";
+                                      return !!px && v === px.trim();
+                                    })()
                                   }
                                   onClick={() => void markPayoutSent(p.id)}
                                   className="rounded-md bg-emerald-300 px-3 py-1.5 text-xs font-semibold text-slate-900 disabled:opacity-50"
@@ -1262,7 +1286,9 @@ export default function Dashboard() {
                                     </button>
                                   ) : null}
                                 </div>
-                                <div className="text-slate-400">by: {p.sent_by ? String(p.sent_by).slice(0, 8) : "—"}</div>
+                                <div className="text-slate-400">
+                                  by: {p.sent_by ? (sessionUserId && p.sent_by === sessionUserId ? "you" : String(p.sent_by).slice(0, 8)) : "—"}
+                                </div>
                               </div>
                             ) : (
                               <div className="text-[11px] text-slate-400">—</div>
