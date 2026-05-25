@@ -123,17 +123,49 @@ export async function POST(req: Request) {
 
     const correlation_id = crypto.randomUUID();
 
+    // Guardian Stage D expects explicit compliance metadata.
+    // MVP assumption: single-tenant per user session.
+    const tenant_id = uid;
+    const purpose = "payout_request";
+    const content = `Payout request: party=${(party as unknown as { display_name?: unknown }).display_name ?? party_id} amount_usd=${amount_usd}`;
+
     const guardianDecision = await validateWithGuardian({
       stage: "D",
+      content,
       metadata: {
         product: "synora-audio",
         content_type: "payout_request",
         correlation_id,
         user_id: uid,
+        tenant_id,
+        purpose,
         party_id,
         party_display_name: (party as unknown as { display_name?: unknown }).display_name ?? null,
         amount_usd,
         balance: bal,
+      },
+      request: {
+        // Keep scope minimal (no PII) and avoid any "mass export" interpretation.
+        scope: {
+          kind: "payout_request",
+          party_id,
+          amount_usd,
+        },
+        subject: {
+          kind: "single_payout",
+          party_id,
+        },
+        retention: {
+          kind: "audit",
+          // MVP default; adjust when policy is defined.
+          ttl_days: 3650,
+        },
+        masking: true,
+        justification: "Solicitação de payout (MVP) — validação de risco e trilha de auditoria.",
+        approver: {
+          kind: "self_service",
+          user_id: uid,
+        },
       },
       proposal: {
         kind: "payout_request",
