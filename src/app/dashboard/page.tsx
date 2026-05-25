@@ -114,6 +114,11 @@ export default function Dashboard() {
   const [destPixKeyType, setDestPixKeyType] = useState<string>("email");
   const [destPixKey, setDestPixKey] = useState<string>("");
   const [destReceiverName, setDestReceiverName] = useState<string>("");
+  const [destBankName, setDestBankName] = useState<string>("");
+  const [destBankBranch, setDestBankBranch] = useState<string>("");
+  const [destBankAccount, setDestBankAccount] = useState<string>("");
+  const [destBankAccountType, setDestBankAccountType] = useState<string>("checking");
+  const [destBankHolderName, setDestBankHolderName] = useState<string>("");
   const [creatingDestination, setCreatingDestination] = useState(false);
   const [destinationActionErr, setDestinationActionErr] = useState<string | null>(null);
 
@@ -127,11 +132,12 @@ export default function Dashboard() {
   const [payoutsSearch, setPayoutsSearch] = useState<string>("");
 
   const payoutMethods = useMemo(
-    () => ["PIX", "TRANSFERENCIA", "WISE", "STRIPE", "PAYPAL", "CRYPTO", "OUTRO"] as const,
+    () => ["PIX", "BANK", "TRANSFERENCIA", "WISE", "STRIPE", "PAYPAL", "CRYPTO", "OUTRO"] as const,
     []
   );
   const payoutMethodLabel: Record<string, string> = {
     PIX: "PIX",
+    BANK: "Transferência Bancária",
     TRANSFERENCIA: "Transferência Bancária",
     WISE: "Wise",
     STRIPE: "Stripe",
@@ -141,6 +147,7 @@ export default function Dashboard() {
   };
   const payoutMethodPrefix: Record<string, string> = {
     PIX: "PIX: ",
+    BANK: "BANK: ",
     TRANSFERENCIA: "TRANSFERENCIA: ",
     WISE: "WISE: ",
     STRIPE: "STRIPE: ",
@@ -153,6 +160,8 @@ export default function Dashboard() {
     switch (method) {
       case "PIX":
         return "Cole E2E ID / TXID do PIX";
+      case "BANK":
+        return "Cole NSU/autenticação bancária";
       case "TRANSFERENCIA":
         return "Cole NSU/autenticação bancária";
       case "WISE":
@@ -902,9 +911,20 @@ export default function Dashboard() {
               pix_key: destPixKey.trim(),
               receiver_name: destReceiverName.trim() || null,
             }
-          : {};
+          : {
+              bank: destBankName.trim(),
+              branch: destBankBranch.trim(),
+              account: destBankAccount.trim(),
+              account_type: destBankAccountType,
+              holder_name: destBankHolderName.trim() || null,
+            };
 
       if (destProvider === "PIX" && !String(details.pix_key ?? "").trim()) throw new Error("Informe a chave PIX");
+      if (destProvider === "BANK") {
+        if (!String(details.bank ?? "").trim()) throw new Error("Informe o banco");
+        if (!String(details.branch ?? "").trim()) throw new Error("Informe a agência");
+        if (!String(details.account ?? "").trim()) throw new Error("Informe a conta");
+      }
 
       const res = await fetch(`/api/payout-destinations`, {
         method: "POST",
@@ -923,6 +943,10 @@ export default function Dashboard() {
       setDestLabel("");
       setDestPixKey("");
       setDestReceiverName("");
+      setDestBankName("");
+      setDestBankBranch("");
+      setDestBankAccount("");
+      setDestBankHolderName("");
       await refreshDestinations(sessionToken);
     } catch (e: unknown) {
       setDestinationActionErr(e instanceof Error ? e.message : "Erro ao criar destination");
@@ -2105,9 +2129,7 @@ export default function Dashboard() {
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               <select value={destProvider} onChange={(e) => setDestProvider(e.target.value as "PIX" | "BANK")} className="syn-select">
                 <option value="PIX">PIX</option>
-                <option value="BANK" disabled>
-                  BANK (em breve)
-                </option>
+                <option value="BANK">BANK</option>
               </select>
               <input
                 value={destCurrency}
@@ -2147,6 +2169,45 @@ export default function Dashboard() {
                   value={destReceiverName}
                   onChange={(e) => setDestReceiverName(e.target.value)}
                   placeholder="Nome do recebedor (opcional)"
+                  className="rounded-md bg-white/10 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10"
+                />
+              </div>
+            ) : destProvider === "BANK" ? (
+              <div className="mt-2 grid gap-2">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <input
+                    value={destBankName}
+                    onChange={(e) => setDestBankName(e.target.value)}
+                    placeholder="Banco (ex: Inter / Itaú / 341)"
+                    className="rounded-md bg-white/10 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10"
+                  />
+                  <select
+                    value={destBankAccountType}
+                    onChange={(e) => setDestBankAccountType(e.target.value)}
+                    className="syn-select"
+                  >
+                    <option value="checking">checking</option>
+                    <option value="savings">savings</option>
+                  </select>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <input
+                    value={destBankBranch}
+                    onChange={(e) => setDestBankBranch(e.target.value)}
+                    placeholder="Agência"
+                    className="rounded-md bg-white/10 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10"
+                  />
+                  <input
+                    value={destBankAccount}
+                    onChange={(e) => setDestBankAccount(e.target.value)}
+                    placeholder="Conta"
+                    className="rounded-md bg-white/10 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10"
+                  />
+                </div>
+                <input
+                  value={destBankHolderName}
+                  onChange={(e) => setDestBankHolderName(e.target.value)}
+                  placeholder="Titular (opcional)"
                   className="rounded-md bg-white/10 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10"
                 />
               </div>
