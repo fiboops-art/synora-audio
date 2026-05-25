@@ -303,6 +303,12 @@ export default function Dashboard() {
     return String(actor_id).slice(0, 8);
   }
 
+  function uiStatusLabel(status: string | null | undefined) {
+    const s = String(status ?? "");
+    if (s === "SENT") return "SETTLED";
+    return s || "—";
+  }
+
   const [applyingSplits, setApplyingSplits] = useState(false);
   const [applySplitsMsg, setApplySplitsMsg] = useState<string | null>(null);
   const [applySplitsErr, setApplySplitsErr] = useState<string | null>(null);
@@ -1680,7 +1686,7 @@ export default function Dashboard() {
                             {ev.action}
                             {ev.from_status || ev.to_status ? (
                               <span className="ml-2 text-slate-300">
-                                {ev.from_status ?? "—"} → {ev.to_status ?? "—"}
+                                {uiStatusLabel(ev.from_status)} → {uiStatusLabel(ev.to_status)}
                               </span>
                             ) : null}
                           </div>
@@ -1757,7 +1763,7 @@ export default function Dashboard() {
                         <span className="text-slate-400">Amount:</span> {usdFmt.format(Number(detailsPayout.amount_usd ?? 0))}
                       </div>
                       <div>
-                        <span className="text-slate-400">Status:</span> {detailsPayout.status}
+                        <span className="text-slate-400">Status:</span> {uiStatusLabel(detailsPayout.status)}
                       </div>
                       <div>
                         <span className="text-slate-400">Created:</span> {new Date(detailsPayout.created_at).toLocaleString()}
@@ -1827,9 +1833,9 @@ export default function Dashboard() {
                                   {ev.action}
                                   {ev.from_status || ev.to_status ? (
                                     <span className="ml-2 text-slate-300">
-                                      {ev.from_status ?? "—"} → {ev.to_status ?? "—"}
-                                    </span>
-                                  ) : null}
+                                  {uiStatusLabel(ev.from_status)} → {uiStatusLabel(ev.to_status)}
+                                </span>
+                              ) : null}
                                 </div>
                                 <div className="text-[11px] text-slate-400">{new Date(ev.created_at).toLocaleString()}</div>
                               </div>
