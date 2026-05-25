@@ -116,6 +116,16 @@ export default function Dashboard() {
   const payoutRefTooltip =
     "Identificador utilizado para comprovar e reconciliar o envio do payout (PIX E2E, transfer_id, tx_hash, payout_batch_id etc).";
 
+  function splitKnownPrefix(value: string): { prefixKey: string | null; rest: string } {
+    const v = (value ?? "").trim();
+    const m = v.match(/^([A-Z_]+):\s*(.*)$/);
+    if (!m) return { prefixKey: null, rest: v };
+    const key = m[1] ?? "";
+    const rest = (m[2] ?? "").trim();
+    if (!payoutMethods.includes(key as (typeof payoutMethods)[number])) return { prefixKey: null, rest: v };
+    return { prefixKey: key, rest };
+  }
+
   function jwtSub(token: string | null): string | null {
     try {
       if (!token) return null;
@@ -1216,11 +1226,20 @@ export default function Dashboard() {
                                     const prefix = payoutMethodPrefix[method] ?? "";
                                     if (!prefix) return;
                                     setPayoutSentRefById((cur) => {
-                                      const existing = (cur[p.id] ?? "").trim();
-                                      const hasKnownPrefix = payoutMethods.some((m) => existing.startsWith(payoutMethodPrefix[m]));
-                                      if (!existing || hasKnownPrefix) return { ...cur, [p.id]: prefix };
-                                      // Preserve what user typed (assume it's the identifier) and just ensure prefix.
-                                      return existing.startsWith(prefix) ? cur : { ...cur, [p.id]: prefix + existing };
+                                      const existing = String(cur[p.id] ?? "");
+                                      const { prefixKey, rest } = splitKnownPrefix(existing);
+
+                                      // If user only had a prefix (PIX:) or empty, just set the new prefix.
+                                      if (!rest) return { ...cur, [p.id]: prefix };
+
+                                      // If it already has the same prefix, keep as-is.
+                                      if (prefixKey && payoutMethodPrefix[prefixKey] === prefix) return cur;
+
+                                      // If it had another known prefix, replace it with the new prefix and preserve the identifier part.
+                                      if (prefixKey) return { ...cur, [p.id]: prefix + rest };
+
+                                      // If it had no known prefix, assume the existing value is the identifier.
+                                      return { ...cur, [p.id]: prefix + rest };
                                     });
                                   }}
                                   className="syn-select h-8 px-2 text-xs sm:w-[190px]"
