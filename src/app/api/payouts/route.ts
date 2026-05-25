@@ -68,6 +68,11 @@ export async function PATCH(req: Request) {
     if (!payout_id) return NextResponse.json({ error: "Missing payout_id" }, { status: 400 });
     if (!nextStatus) return NextResponse.json({ error: "Missing status" }, { status: 400 });
 
+    // Harden: require a reference when marking as SENT.
+    if (nextStatus === "SENT" && !sent_ref) {
+      return NextResponse.json({ error: "sent_ref é obrigatório para marcar como SENT" }, { status: 400 });
+    }
+
     const service = getSupabaseService();
     const { data: userData, error: userErr } = await service.auth.getUser(token);
     if (userErr || !userData.user) return NextResponse.json({ error: "Invalid session" }, { status: 401 });

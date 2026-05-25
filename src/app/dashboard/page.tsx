@@ -570,6 +570,7 @@ export default function Dashboard() {
     setPayoutError(null);
     try {
       const sent_ref = (payoutSentRefById[payout_id] ?? "").trim();
+      if (!sent_ref) throw new Error("Informe uma referência (sent_ref) antes de marcar como SENT");
       const res = await fetch(`/api/payouts`, {
         method: "PATCH",
         headers: { "content-type": "application/json", authorization: `Bearer ${sessionToken}` },
@@ -1099,7 +1100,7 @@ export default function Dashboard() {
                             {p.status === "APPROVED" ? (
                               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                                 <input
-                                  placeholder="ref (opcional)"
+                                  placeholder="ref (obrigatório)"
                                   value={payoutSentRefById[p.id] ?? ""}
                                   onChange={(e) =>
                                     setPayoutSentRefById((cur) => ({
@@ -1110,7 +1111,7 @@ export default function Dashboard() {
                                   className="w-full rounded-md bg-white/10 px-2 py-1 text-xs text-slate-100 ring-1 ring-white/10 placeholder:text-slate-400 sm:w-[180px]"
                                 />
                                 <button
-                                  disabled={!sessionToken || payoutUpdatingId === p.id}
+                                  disabled={!sessionToken || payoutUpdatingId === p.id || !(payoutSentRefById[p.id] ?? "").trim()}
                                   onClick={() => void markPayoutSent(p.id)}
                                   className="rounded-md bg-emerald-300 px-3 py-1.5 text-xs font-semibold text-slate-900 disabled:opacity-50"
                                 >
