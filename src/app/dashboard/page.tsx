@@ -147,6 +147,72 @@ export default function Dashboard() {
     Array<{ id: string; action: string; from_status: string | null; to_status: string | null; actor_id: string; created_at: string; payload: unknown }>
   >([]);
 
+  // Settlement details panel (drawer)
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsPayoutId, setDetailsPayoutId] = useState<string | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsErr, setDetailsErr] = useState<string | null>(null);
+  const [detailsPayout, setDetailsPayout] = useState<null | {
+    id: string;
+    party_id: string;
+    amount_usd: number;
+    status: string;
+    created_at: string;
+    updated_at?: string;
+    sent_at?: string | null;
+    sent_ref?: string | null;
+    payout_method?: string | null;
+    sent_by?: string | null;
+    correlation_id: string | null;
+    meta?: unknown;
+    guardian_raw?: unknown;
+    party: null | { id: string; display_name: string | null; email: string | null };
+  }>(null);
+
+  const [detailsEventsLoading, setDetailsEventsLoading] = useState(false);
+  const [detailsEventsErr, setDetailsEventsErr] = useState<string | null>(null);
+  const [detailsEvents, setDetailsEvents] = useState<typeof events>([]);
+
+  const openPayoutDetails = useCallback(
+    async (payout_id: string) => {
+      if (!sessionToken) return;
+      setDetailsOpen(true);
+      setDetailsPayoutId(payout_id);
+      setDetailsErr(null);
+      setDetailsLoading(true);
+      setDetailsPayout(null);
+      setDetailsEventsErr(null);
+      setDetailsEventsLoading(true);
+      setDetailsEvents([]);
+      try {
+        const [pRes, eRes] = await Promise.all([
+          fetch(`/api/payouts/${encodeURIComponent(payout_id)}`, {
+            headers: { authorization: `Bearer ${sessionToken}` },
+            cache: "no-store",
+          }),
+          fetch(`/api/payouts/events?payout_id=${encodeURIComponent(payout_id)}&limit=50`, {
+            headers: { authorization: `Bearer ${sessionToken}` },
+            cache: "no-store",
+          }),
+        ]);
+
+        const pj = (await pRes.json()) as { payout?: unknown; error?: string };
+        if (!pRes.ok) throw new Error(pj.error || `HTTP ${pRes.status}`);
+        setDetailsPayout(pj.payout as typeof detailsPayout);
+
+        const ej = (await eRes.json()) as { events?: unknown[]; error?: string };
+        if (!eRes.ok) throw new Error(ej.error || `HTTP ${eRes.status}`);
+        setDetailsEvents((ej.events ?? []) as typeof events);
+      } catch (e: unknown) {
+        setDetailsErr(e instanceof Error ? e.message : "Erro ao carregar detalhes");
+      } finally {
+        setDetailsLoading(false);
+        setDetailsEventsLoading(false);
+      }
+    },
+    [sessionToken]
+  );
+
   const openPayoutEvents = useCallback(
     async (payout_id: string) => {
       if (!sessionToken) return;
@@ -1271,6 +1337,7 @@ export default function Dashboard() {
                         <th className="px-3 py-2">Party</th>
                         <th className="px-3 py-2">Valor (USD)</th>
                         <th className="px-3 py-2">Status</th>
+                        <th className="px-3 py-2">Detalhes</th>
                         <th className="px-3 py-2">Ação</th>
                         <th className="px-3 py-2">Audit</th>
                       </tr>
@@ -1286,6 +1353,17 @@ export default function Dashboard() {
                           <td className="px-3 py-2 font-semibold text-emerald-200">{usdFmt.format(Number(p.amount_usd ?? 0))}</td>
                           <td className="px-3 py-2">
                             <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] ring-1 ring-white/10">{p.status}</span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <button
+                              type="button"
+                              disabled={!sessionToken}
+                              onClick={() => void openPayoutDetails(p.id)}
+                              className="rounded-md bg-white/10 px-3 py-1.5 text-xs font-semibold text-slate-100 ring-1 ring-white/10 hover:bg-white/15 disabled:opacity-50"
+                              title="Abrir settlement details panel"
+                            >
+                              detalhes
+                            </button>
                           </td>
                           <td className="px-3 py-2">
                             {p.status === "APPROVED" ? (
@@ -1491,6 +1569,157 @@ export default function Dashboard() {
                     ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {detailsOpen ? (
+        <div className="fixed inset-0 z-50">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/60"
+            onClick={() => {
+              setDetailsOpen(false);
+              setDetailsPayoutId(null);
+            }}
+            aria-label="Fechar detalhes"
+          />
+          <div className="absolute right-0 top-0 h-full w-full max-w-xl overflow-auto bg-slate-950 ring-1 ring-white/10">
+            <div className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-4">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-white">Settlement details</div>
+                <div className="mt-1 truncate text-xs text-slate-300">{detailsPayoutId}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setDetailsOpen(false);
+                  setDetailsPayoutId(null);
+                }}
+                className="rounded-md bg-white/10 px-3 py-1.5 text-xs font-semibold text-slate-100 ring-1 ring-white/10 hover:bg-white/15"
+              >
+                fechar
+              </button>
+            </div>
+
+            <div className="space-y-4 p-4">
+              {detailsLoading ? (
+                <div className="text-sm text-slate-200/80">Carregando…</div>
+              ) : detailsErr ? (
+                <pre className="whitespace-pre-wrap rounded-md bg-red-500/10 p-3 text-xs text-red-200 ring-1 ring-red-500/20">{detailsErr}</pre>
+              ) : detailsPayout ? (
+                <>
+                  <div className="syn-card p-4">
+                    <div className="text-xs text-slate-300">Payout info</div>
+                    <div className="mt-2 grid gap-2 text-xs text-slate-100">
+                      <div>
+                        <span className="text-slate-400">Party:</span> {detailsPayout.party?.display_name ?? detailsPayout.party_id}
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Amount:</span> {usdFmt.format(Number(detailsPayout.amount_usd ?? 0))}
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Status:</span> {detailsPayout.status}
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Created:</span> {new Date(detailsPayout.created_at).toLocaleString()}
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Correlation:</span> {detailsPayout.correlation_id ?? "—"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="syn-card p-4">
+                    <div className="text-xs text-slate-300">Settlement info</div>
+                    <div className="mt-2 grid gap-2 text-xs text-slate-100">
+                      <div>
+                        <span className="text-slate-400">Method:</span> {detailsPayout.payout_method ? payoutMethodLabel[String(detailsPayout.payout_method)] ?? detailsPayout.payout_method : "—"}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-400">Proof:</span>
+                        <span className="truncate">{detailsPayout.sent_ref ?? "—"}</span>
+                        {detailsPayout.sent_ref ? (
+                          <button
+                            type="button"
+                            onClick={() => void navigator.clipboard?.writeText(detailsPayout.sent_ref ?? "")}
+                            className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] text-slate-100 ring-1 ring-white/10 hover:bg-white/15"
+                          >
+                            copiar
+                          </button>
+                        ) : null}
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Settled at:</span> {detailsPayout.sent_at ? new Date(detailsPayout.sent_at).toLocaleString() : "—"}
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Operator:</span> {detailsPayout.sent_by ? (sessionUserId && detailsPayout.sent_by === sessionUserId ? "you" : String(detailsPayout.sent_by)) : "—"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="syn-card p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs text-slate-300">Audit timeline</div>
+                      <button
+                        type="button"
+                        onClick={() => detailsPayoutId && void openPayoutEvents(detailsPayoutId)}
+                        className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] text-slate-100 ring-1 ring-white/10 hover:bg-white/15"
+                        title="Atalho para o modal de histórico"
+                      >
+                        histórico
+                      </button>
+                    </div>
+
+                    {detailsEventsLoading ? (
+                      <div className="mt-2 text-sm text-slate-200/80">Carregando…</div>
+                    ) : detailsEventsErr ? (
+                      <pre className="mt-2 whitespace-pre-wrap rounded-md bg-red-500/10 p-3 text-xs text-red-200 ring-1 ring-red-500/20">{detailsEventsErr}</pre>
+                    ) : detailsEvents.length === 0 ? (
+                      <div className="mt-2 text-sm text-slate-200/80">Nenhum evento.</div>
+                    ) : (
+                      <div className="mt-3 space-y-2">
+                        {detailsEvents
+                          .slice()
+                          .reverse()
+                          .map((ev) => (
+                            <div key={ev.id} className="rounded-md bg-white/5 p-3 ring-1 ring-white/10">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-xs font-semibold text-white">
+                                  {ev.action}
+                                  {ev.from_status || ev.to_status ? (
+                                    <span className="ml-2 text-slate-300">
+                                      {ev.from_status ?? "—"} → {ev.to_status ?? "—"}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <div className="text-[11px] text-slate-400">{new Date(ev.created_at).toLocaleString()}</div>
+                              </div>
+                              <div className="mt-1 text-[11px] text-slate-400">actor: {actorLabel(ev.actor_id)}</div>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="syn-card p-4">
+                    <div className="text-xs text-slate-300">Raw payload</div>
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-xs text-slate-300">meta</summary>
+                      <pre className="mt-2 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md bg-black/40 p-3 text-[11px] text-slate-100 ring-1 ring-white/10">
+                        {JSON.stringify(detailsPayout.meta ?? null, null, 2)}
+                      </pre>
+                    </details>
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-xs text-slate-300">guardian_raw</summary>
+                      <pre className="mt-2 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md bg-black/40 p-3 text-[11px] text-slate-100 ring-1 ring-white/10">
+                        {JSON.stringify(detailsPayout.guardian_raw ?? null, null, 2)}
+                      </pre>
+                    </details>
+                  </div>
+                </>
+              ) : null}
             </div>
           </div>
         </div>
