@@ -105,13 +105,49 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Cannot change status after SENT" }, { status: 400 });
     }
 
-    // Anti-duplicidade hard (ops): sent_ref must be unique per user among SENT payouts.
+    // Anti-duplicidade hard (ops): sent_ref must be unique per user+method among SENT payouts.
     if (nextStatus === "SENT") {
+      // Smart validators (avoid confusing destination with settlement proof)
+      if ((payout_method === "PIX" || payout_method === "TRANSFERENCIA") && /@/.test(sent_ref ?? "")) {
+        return NextResponse.json(
+          { error: "sent_ref inválido: use o comprovante (E2E/TXID/NSU), não email/chave" },
+          { status: 400 }
+        );
+      }
+
+      const refTail = String(sent_ref ?? "").replace(/^[A-Z_]+:\s*/i, "").trim();
+      if (payout_method === "PIX") {
+        // Allow common PIX proof identifiers: E2E ID or TXID-like strings (keep flexible).
+        if (refTail.length < 8) {
+          return NextResponse.json(
+            { error: "sent_ref inválido: para PIX, informe E2E ID / TXID do comprovante" },
+            { status: 400 }
+          );
+        }
+      }
+      if (payout_method === "TRANSFERENCIA") {
+        if (refTail.length < 6) {
+          return NextResponse.json(
+            { error: "sent_ref inválido: para transferência, informe NSU/autenticação bancária" },
+            { status: 400 }
+          );
+        }
+      }
+      if (payout_method === "CRYPTO") {
+        if (!/^(0x)?[a-fA-F0-9]{20,}$/.test(refTail)) {
+          return NextResponse.json(
+            { error: "sent_ref inválido: para cripto, informe um tx_hash válido" },
+            { status: 400 }
+          );
+        }
+      }
+
       const { data: dup, error: dupErr } = await service
         .from("payout_requests")
         .select("id")
         .eq("user_id", uid)
         .eq("status", "SENT")
+        .eq("payout_method", payout_method)
         .eq("sent_ref", sent_ref)
         .neq("id", payout_id)
         .limit(1);

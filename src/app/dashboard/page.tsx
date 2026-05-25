@@ -114,6 +114,27 @@ export default function Dashboard() {
     OUTRO: "OUTRO: ",
   };
 
+  function payoutRefPlaceholder(method: string) {
+    switch (method) {
+      case "PIX":
+        return "Cole E2E ID / TXID do PIX";
+      case "TRANSFERENCIA":
+        return "Cole NSU/autenticação bancária";
+      case "WISE":
+        return "Cole transfer_id";
+      case "STRIPE":
+        return "Cole payout_id/transfer_id";
+      case "PAYPAL":
+        return "Cole payout_id/payout_batch_id";
+      case "CRYPTO":
+        return "Cole tx_hash";
+      case "OUTRO":
+        return "Cole referência operacional";
+      default:
+        return "ref/comprovante";
+    }
+  }
+
   const payoutRefTooltip =
     "Identificador utilizado para comprovar e reconciliar o envio do payout (PIX E2E, transfer_id, tx_hash, payout_batch_id etc).";
 
@@ -1198,7 +1219,7 @@ export default function Dashboard() {
                   >
                     <option value="all">status: todos</option>
                     <option value="APPROVED">APPROVED</option>
-                    <option value="SENT">SENT</option>
+                    <option value="SENT">SETTLED</option>
                     <option value="BLOCKED">BLOCKED</option>
                     <option value="FAILED">FAILED</option>
                     <option value="CANCELED">CANCELED</option>
@@ -1304,7 +1325,11 @@ export default function Dashboard() {
                                   ))}
                                 </select>
                                 <input
-                                  placeholder="ref/comprovante (obrigatório)"
+                                  placeholder={
+                                    (payoutMethodById[p.id] ?? "").trim()
+                                      ? payoutRefPlaceholder((payoutMethodById[p.id] ?? "").trim())
+                                      : "ref/comprovante"
+                                  }
                                   value={payoutSentRefById[p.id] ?? ""}
                                   onChange={(e) =>
                                     setPayoutSentRefById((cur) => ({
@@ -1353,7 +1378,7 @@ export default function Dashboard() {
                             ) : p.status === "SENT" ? (
                               <div className="space-y-1 text-[11px] text-slate-300">
                                 <div>
-                                  <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-200 ring-1 ring-emerald-500/20">SENT</span>
+                                  <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-200 ring-1 ring-emerald-500/20">SETTLED</span>
                                 </div>
                                 <div className="text-slate-200/90">
                                   {p.payout_method ? payoutMethodLabel[String(p.payout_method)] ?? p.payout_method : "—"}
