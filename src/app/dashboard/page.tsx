@@ -72,6 +72,8 @@ export default function Dashboard() {
       updated_at?: string;
       sent_at?: string | null;
       sent_ref?: string | null;
+      payout_method?: string | null;
+      sent_by?: string | null;
       correlation_id: string | null;
       meta?: unknown;
       party: null | { id: string; display_name: string | null; email: string | null };
@@ -81,7 +83,38 @@ export default function Dashboard() {
   const [payoutsErr, setPayoutsErr] = useState<string | null>(null);
 
   const [payoutSentRefById, setPayoutSentRefById] = useState<Record<string, string>>({});
+  const [payoutMethodById, setPayoutMethodById] = useState<Record<string, string>>({});
   const [payoutUpdatingId, setPayoutUpdatingId] = useState<string | null>(null);
+
+  const [payoutsStatusFilter, setPayoutsStatusFilter] = useState<string>("all");
+  const [payoutsMethodFilter, setPayoutsMethodFilter] = useState<string>("all");
+  const [payoutsSearch, setPayoutsSearch] = useState<string>("");
+
+  const payoutMethods = useMemo(
+    () => ["PIX", "TRANSFERENCIA", "WISE", "STRIPE", "PAYPAL", "CRYPTO", "OUTRO"] as const,
+    []
+  );
+  const payoutMethodLabel: Record<string, string> = {
+    PIX: "PIX",
+    TRANSFERENCIA: "Transferência Bancária",
+    WISE: "Wise",
+    STRIPE: "Stripe",
+    PAYPAL: "PayPal",
+    CRYPTO: "Cripto",
+    OUTRO: "Outro",
+  };
+  const payoutMethodPrefix: Record<string, string> = {
+    PIX: "PIX: ",
+    TRANSFERENCIA: "TRANSFERENCIA: ",
+    WISE: "WISE: ",
+    STRIPE: "STRIPE: ",
+    PAYPAL: "PAYPAL: ",
+    CRYPTO: "CRYPTO: ",
+    OUTRO: "OUTRO: ",
+  };
+
+  const payoutRefTooltip =
+    "Identificador utilizado para comprovar e reconciliar o envio do payout (PIX E2E, transfer_id, tx_hash, payout_batch_id etc).";
 
   const [applyingSplits, setApplyingSplits] = useState(false);
   const [applySplitsMsg, setApplySplitsMsg] = useState<string | null>(null);
@@ -569,12 +602,14 @@ export default function Dashboard() {
     setPayoutUpdatingId(payout_id);
     setPayoutError(null);
     try {
+      const method = (payoutMethodById[payout_id] ?? "").trim();
+      if (!method) throw new Error("Selecione o método de pagamento");
       const sent_ref = (payoutSentRefById[payout_id] ?? "").trim();
       if (!sent_ref) throw new Error("Informe uma referência (sent_ref) antes de marcar como SENT");
       const res = await fetch(`/api/payouts`, {
         method: "PATCH",
         headers: { "content-type": "application/json", authorization: `Bearer ${sessionToken}` },
-        body: JSON.stringify({ payout_id, status: "SENT", sent_ref: sent_ref || undefined }),
+        body: JSON.stringify({ payout_id, status: "SENT", payout_method: method, sent_ref: sent_ref || undefined }),
       });
       const j = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
@@ -587,6 +622,26 @@ export default function Dashboard() {
       setPayoutUpdatingId(null);
     }
   }
+
+  const filteredPayouts = useMemo(() => {
+    const q = payoutsSearch.trim().toLowerCase();
+    return payouts.filter((p) => {
+      if (payoutsStatusFilter !== "all" && p.status !== payoutsStatusFilter) return false;
+      if (payoutsMethodFilter !== "all" && String(p.payout_method ?? "") !== payoutsMethodFilter) return false;
+      if (!q) return true;
+      const hay = [
+        p.id,
+        p.party?.display_name ?? "",
+        p.party?.email ?? "",
+        p.party_id,
+        p.sent_ref ?? "",
+        p.payout_method ?? "",
+      ]
+        .join(" | ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [payouts, payoutsSearch, payoutsStatusFilter, payoutsMethodFilter]);
 
   async function createParty() {
     if (!sessionToken) return;
@@ -1057,20 +1112,57 @@ export default function Dashboard() {
             <div className="mt-5">
               <div className="flex items-center justify-between">
                 <div className="text-xs text-slate-300">Payout requests (recentes)</div>
-                <button
-                  disabled={!sessionToken || loadingPayouts}
-                  onClick={() => sessionToken && void refreshPayouts(sessionToken)}
-                  className="text-xs text-slate-200 hover:text-white disabled:opacity-50"
-                >
-                  {loadingPayouts ? "Atualizando..." : "Atualizar"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={payoutsStatusFilter}
+                    onChange={(e) => setPayoutsStatusFilter(e.target.value)}
+                    className="syn-select h-8 px-2 text-xs"
+                    title="Filtrar por status"
+                  >
+                    <option value="all">status: todos</option>
+                    <option value="APPROVED">APPROVED</option>
+                    <option value="SENT">SENT</option>
+                    <option value="BLOCKED">BLOCKED</option>
+                    <option value="FAILED">FAILED</option>
+                    <option value="CANCELED">CANCELED</option>
+                  </select>
+
+                  <select
+                    value={payoutsMethodFilter}
+                    onChange={(e) => setPayoutsMethodFilter(e.target.value)}
+                    className="syn-select h-8 px-2 text-xs"
+                    title="Filtrar por método"
+                  >
+                    <option value="all">método: todos</option>
+                    {payoutMethods.map((m) => (
+                      <option key={m} value={m}>
+                        {payoutMethodLabel[m]}
+                      </option>
+                    ))}
+                  </select>
+
+                  <input
+                    value={payoutsSearch}
+                    onChange={(e) => setPayoutsSearch(e.target.value)}
+                    placeholder="buscar ref/party"
+                    className="h-8 w-[160px] rounded-md bg-white/10 px-2 text-xs text-slate-100 ring-1 ring-white/10 placeholder:text-slate-400"
+                  />
+
+                  <button
+                    disabled={!sessionToken || loadingPayouts}
+                    onClick={() => sessionToken && void refreshPayouts(sessionToken)}
+                    className="text-xs text-slate-200 hover:text-white disabled:opacity-50"
+                  >
+                    {loadingPayouts ? "Atualizando..." : "Atualizar"}
+                  </button>
+                </div>
               </div>
 
               {payoutsErr ? (
                 <pre className="mt-2 whitespace-pre-wrap rounded-md bg-red-500/10 p-3 text-xs text-red-200 ring-1 ring-red-500/20">
                   {payoutsErr}
                 </pre>
-              ) : payouts.length === 0 ? (
+              ) : filteredPayouts.length === 0 ? (
                 <div className="mt-2 text-sm text-slate-200/80">Nenhum payout solicitado ainda.</div>
               ) : (
                 <div className="mt-2 overflow-hidden rounded-md ring-1 ring-white/10">
@@ -1085,7 +1177,7 @@ export default function Dashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {payouts.map((p) => (
+                      {filteredPayouts.map((p) => (
                         <tr key={p.id} className="border-t border-white/10">
                           <td className="px-3 py-2 text-slate-300">{new Date(p.created_at).toLocaleString()}</td>
                           <td className="px-3 py-2">
@@ -1099,8 +1191,32 @@ export default function Dashboard() {
                           <td className="px-3 py-2">
                             {p.status === "APPROVED" ? (
                               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                <select
+                                  value={payoutMethodById[p.id] ?? ""}
+                                  onChange={(e) => {
+                                    const method = e.target.value;
+                                    setPayoutMethodById((cur) => ({ ...cur, [p.id]: method }));
+                                    const prefix = payoutMethodPrefix[method] ?? "";
+                                    if (!prefix) return;
+                                    setPayoutSentRefById((cur) => {
+                                      const existing = (cur[p.id] ?? "").trim();
+                                      const hasKnownPrefix = payoutMethods.some((m) => existing.startsWith(payoutMethodPrefix[m]));
+                                      if (!existing || hasKnownPrefix) return { ...cur, [p.id]: prefix };
+                                      return existing.startsWith(prefix) ? cur : { ...cur, [p.id]: prefix + existing };
+                                    });
+                                  }}
+                                  className="syn-select h-8 px-2 text-xs sm:w-[190px]"
+                                  title="Método de pagamento"
+                                >
+                                  <option value="">método…</option>
+                                  {payoutMethods.map((m) => (
+                                    <option key={m} value={m}>
+                                      {payoutMethodLabel[m]}
+                                    </option>
+                                  ))}
+                                </select>
                                 <input
-                                  placeholder="ref (obrigatório)"
+                                  placeholder="ref/comprovante (obrigatório)"
                                   value={payoutSentRefById[p.id] ?? ""}
                                   onChange={(e) =>
                                     setPayoutSentRefById((cur) => ({
@@ -1108,10 +1224,16 @@ export default function Dashboard() {
                                       [p.id]: e.target.value,
                                     }))
                                   }
-                                  className="w-full rounded-md bg-white/10 px-2 py-1 text-xs text-slate-100 ring-1 ring-white/10 placeholder:text-slate-400 sm:w-[180px]"
+                                  title={payoutRefTooltip}
+                                  className="w-full rounded-md bg-white/10 px-2 py-1 text-xs text-slate-100 ring-1 ring-white/10 placeholder:text-slate-400 sm:w-[220px]"
                                 />
                                 <button
-                                  disabled={!sessionToken || payoutUpdatingId === p.id || !(payoutSentRefById[p.id] ?? "").trim()}
+                                  disabled={
+                                    !sessionToken ||
+                                    payoutUpdatingId === p.id ||
+                                    !(payoutSentRefById[p.id] ?? "").trim() ||
+                                    !(payoutMethodById[p.id] ?? "").trim()
+                                  }
                                   onClick={() => void markPayoutSent(p.id)}
                                   className="rounded-md bg-emerald-300 px-3 py-1.5 text-xs font-semibold text-slate-900 disabled:opacity-50"
                                 >
@@ -1119,7 +1241,29 @@ export default function Dashboard() {
                                 </button>
                               </div>
                             ) : p.status === "SENT" ? (
-                              <div className="text-[11px] text-slate-300">SENT {p.sent_ref ? `(${p.sent_ref})` : ""}</div>
+                              <div className="space-y-1 text-[11px] text-slate-300">
+                                <div>
+                                  <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-200 ring-1 ring-emerald-500/20">SENT</span>
+                                </div>
+                                <div className="text-slate-200/90">
+                                  {p.payout_method ? payoutMethodLabel[String(p.payout_method)] ?? p.payout_method : "—"}
+                                  {p.sent_at ? ` • ${new Date(p.sent_at).toLocaleString()}` : ""}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="truncate">{p.sent_ref ?? "—"}</span>
+                                  {p.sent_ref ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => void navigator.clipboard?.writeText(p.sent_ref ?? "")}
+                                      className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] text-slate-100 ring-1 ring-white/10 hover:bg-white/15"
+                                      title="Copiar referência"
+                                    >
+                                      copiar
+                                    </button>
+                                  ) : null}
+                                </div>
+                                <div className="text-slate-400">by: {p.sent_by ? String(p.sent_by).slice(0, 8) : "—"}</div>
+                              </div>
                             ) : (
                               <div className="text-[11px] text-slate-400">—</div>
                             )}

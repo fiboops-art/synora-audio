@@ -32,7 +32,7 @@ export async function GET(req: Request) {
     let q = service
       .from("payout_requests")
       .select(
-        "id,party_id,amount_usd,status,created_at,updated_at,sent_at,sent_ref,correlation_id, meta, party:parties(id,display_name,email)"
+        "id,party_id,amount_usd,status,created_at,updated_at,sent_at,sent_ref,payout_method,sent_by,correlation_id, meta, party:parties(id,display_name,email)"
       )
       .eq("user_id", uid)
       .order("created_at", { ascending: false })
@@ -58,19 +58,22 @@ export async function PATCH(req: Request) {
     const body = (await req.json()) as {
       payout_id?: string;
       status?: "SENT" | "FAILED" | "CANCELED";
+      payout_method?: string;
       sent_ref?: string;
       note?: string;
     };
     const payout_id = (body.payout_id ?? "").trim();
     const nextStatus = body.status;
+    const payout_method = (body.payout_method ?? "").trim() || null;
     const sent_ref = (body.sent_ref ?? "").trim() || null;
     const note = (body.note ?? "").trim() || null;
     if (!payout_id) return NextResponse.json({ error: "Missing payout_id" }, { status: 400 });
     if (!nextStatus) return NextResponse.json({ error: "Missing status" }, { status: 400 });
 
     // Harden: require a reference when marking as SENT.
-    if (nextStatus === "SENT" && !sent_ref) {
-      return NextResponse.json({ error: "sent_ref é obrigatório para marcar como SENT" }, { status: 400 });
+    if (nextStatus === "SENT") {
+      if (!sent_ref) return NextResponse.json({ error: "sent_ref é obrigatório para marcar como SENT" }, { status: 400 });
+      if (!payout_method) return NextResponse.json({ error: "payout_method é obrigatório para marcar como SENT" }, { status: 400 });
     }
 
     const service = getSupabaseService();
@@ -105,6 +108,8 @@ export async function PATCH(req: Request) {
     if (nextStatus === "SENT") {
       patch.sent_at = new Date().toISOString();
       patch.sent_ref = sent_ref;
+      patch.payout_method = payout_method;
+      patch.sent_by = uid;
     }
     if (note) {
       patch.meta = { note };
@@ -116,7 +121,7 @@ export async function PATCH(req: Request) {
       .eq("user_id", uid)
       .eq("id", payout_id)
       .select(
-        "id,party_id,amount_usd,status,created_at,updated_at,sent_at,sent_ref,correlation_id, meta, party:parties(id,display_name,email)"
+        "id,party_id,amount_usd,status,created_at,updated_at,sent_at,sent_ref,payout_method,sent_by,correlation_id, meta, party:parties(id,display_name,email)"
       )
       .single();
     if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
