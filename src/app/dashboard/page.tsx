@@ -172,6 +172,15 @@ export default function Dashboard() {
 
   const canImport = useMemo(() => csvText.trim().length > 0 && !!sessionToken, [csvText, sessionToken]);
 
+  // Debug: show raw server responses (Guardian payloads, etc.)
+  // Enable by adding ?debug=1 to the URL (or setting NEXT_PUBLIC_DEBUG_GUARDIAN=1).
+  const debugMode = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    const qp = new URLSearchParams(window.location.search);
+    if (qp.get("debug") === "1") return true;
+    return String(process.env.NEXT_PUBLIC_DEBUG_GUARDIAN ?? "") === "1";
+  }, []);
+
   const usdFmt = useMemo(
     () =>
       new Intl.NumberFormat("pt-BR", {
@@ -532,7 +541,11 @@ export default function Dashboard() {
         body: JSON.stringify({ party_id, amount_usd, memo: memo || undefined }),
       });
       const j = (await res.json()) as { ok?: boolean; error?: string; payout?: unknown; guardian?: unknown; balance?: unknown };
-      if (!res.ok) throw new Error(j?.error || `HTTP ${res.status}`);
+      if (!res.ok) {
+        // keep full payload for debugging (Guardian issues, required_actions, etc.)
+        setPayoutResult(JSON.stringify(j, null, 2));
+        throw new Error(j?.error || `HTTP ${res.status}`);
+      }
       setPayoutResult(JSON.stringify(j, null, 2));
       await refreshPayouts(sessionToken);
       await refreshPartyBalances(sessionToken);
@@ -909,13 +922,24 @@ export default function Dashboard() {
             </div>
 
             {payoutError ? (
-              <pre className="mt-3 whitespace-pre-wrap rounded-md bg-red-500/10 p-3 text-xs text-red-200 ring-1 ring-red-500/20">
-                {payoutError}
-              </pre>
-            ) : payoutResult ? (
-              <pre className="mt-3 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md bg-black/30 p-3 text-xs text-slate-100 ring-1 ring-white/10">
-                {payoutResult}
-              </pre>
+              <div className="mt-3 rounded-md bg-red-500/10 p-3 ring-1 ring-red-500/20">
+                <div className="text-xs font-semibold text-red-200">{payoutError}</div>
+                {debugMode && payoutResult ? (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-xs text-red-200/90">ver detalhes (debug)</summary>
+                    <pre className="mt-2 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md bg-black/30 p-3 text-xs text-slate-100 ring-1 ring-white/10">
+                      {payoutResult}
+                    </pre>
+                  </details>
+                ) : null}
+              </div>
+            ) : debugMode && payoutResult ? (
+              <details className="mt-3">
+                <summary className="cursor-pointer text-xs text-slate-300">payout response (debug)</summary>
+                <pre className="mt-2 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md bg-black/30 p-3 text-xs text-slate-100 ring-1 ring-white/10">
+                  {payoutResult}
+                </pre>
+              </details>
             ) : null}
 
             <div className="mt-3 grid gap-2">
