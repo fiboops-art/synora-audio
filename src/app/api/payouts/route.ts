@@ -105,6 +105,25 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Cannot change status after SENT" }, { status: 400 });
     }
 
+    // Anti-duplicidade hard (ops): sent_ref must be unique per user among SENT payouts.
+    if (nextStatus === "SENT") {
+      const { data: dup, error: dupErr } = await service
+        .from("payout_requests")
+        .select("id")
+        .eq("user_id", uid)
+        .eq("status", "SENT")
+        .eq("sent_ref", sent_ref)
+        .neq("id", payout_id)
+        .limit(1);
+      if (dupErr) return NextResponse.json({ error: dupErr.message }, { status: 500 });
+      if ((dup ?? []).length) {
+        return NextResponse.json(
+          { error: "sent_ref já foi usado em outro payout SENT (anti-duplicidade)", duplicate_payout_id: (dup?.[0] as { id?: unknown })?.id ?? null },
+          { status: 409 }
+        );
+      }
+    }
+
     const patch: Record<string, unknown> = {
       status: nextStatus,
       updated_at: new Date().toISOString(),
