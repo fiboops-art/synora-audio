@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { getSupabaseService } from "@/lib/supabaseServer";
 import crypto from "crypto";
 import { validateWithGuardian } from "@/lib/guardianClient";
+import { buildSplitActivationCanonicalPayloadV1, canonicalJsonString, sha256Hex } from "@/lib/splitActivationCanonical";
+import { buildSignedAnchorTxDevnet } from "@/lib/solanaAnchor";
+import { rpcClaimSolanaAnchorV12, rpcSetPreparedSolanaAnchorV12 } from "@/lib/solanaAnchorRpc";
+import { prepareSolanaAnchorPreparedBeforeBroadcast } from "@/lib/solanaAnchorActivate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,10 +15,6 @@ function errMsg(e: unknown): string {
     return (e as { message: string }).message;
   }
   return "Unknown error";
-}
-
-function sha256Hex(input: string): string {
-  return crypto.createHash("sha256").update(input).digest("hex");
 }
 
 export async function GET(req: Request) {
@@ -286,11 +286,11 @@ export async function PATCH(req: Request) {
       // Check all acceptances accepted
       const { data: acc, error: accErr } = await service
         .from("recording_split_acceptances")
-        .select("status")
+        .select("status,party_id")
         .eq("user_id", uid)
         .eq("split_id", split_id);
       if (accErr) return NextResponse.json({ error: accErr.message }, { status: 500 });
-      const rows = (acc ?? []) as Array<{ status: string }>;
+      const rows = (acc ?? []) as Array<{ status: string; party_id: string | null }>;
       if (rows.length === 0) {
         return NextResponse.json({ error: "No acceptances found. Propose first." }, { status: 400 });
       }
@@ -314,6 +314,7 @@ export async function PATCH(req: Request) {
       const recording_id = String((split as unknown as { recording_id?: unknown }).recording_id ?? "");
       const split_version = Number((split as unknown as { version?: unknown }).version ?? 0) || null;
       const correlation_id = crypto.randomUUID();
+      const activated_at = new Date().toISOString();
 
       const guardianDecision = await validateWithGuardian({
         stage: "C",
@@ -348,6 +349,85 @@ export async function PATCH(req: Request) {
             guardian: guardianDecision,
           },
           { status: 403 }
+        );
+      }
+
+      const accepting_party_ids = rows
+        .map((r) => String(r.party_id ?? "").trim())
+        .filter(Boolean);
+
+      const canonicalPayload = buildSplitActivationCanonicalPayloadV1({
+        recording_id,
+        split_id,
+        split_version: split_version ?? 0,
+        items: itemRows,
+        accepting_party_ids,
+        acceptances_required: rows.length,
+        acceptances_accepted: rows.length,
+        guardian_stage: "C",
+        // operational-only (must NOT affect hash)
+        activated_at,
+        guardian_correlation_id: correlation_id,
+      });
+      const canonical_json = canonicalJsonString(canonicalPayload);
+      const fingerprint_sha256_hex = sha256Hex(canonical_json);
+
+      // =====================================================
+      // Solana Anchor Idempotency (V1.2) — PREPARED-BEFORE-BROADCAST (NO BROADCAST IN THIS STEP)
+      //
+      // Server-only RPCs are called via service-role client, with p_user_id enforced inside RPCs.
+      // IMPORTANT (first cycle):
+      // - Only claim responses with claim_acquired=true authorize building/signing a new tx.
+      // =====================================================
+      const { claim, prepared, gate } = await prepareSolanaAnchorPreparedBeforeBroadcast({
+        split_id,
+        user_id: uid,
+        fingerprint_sha256_hex,
+        claim: async (args) =>
+          rpcClaimSolanaAnchorV12({
+            service,
+            split_id: args.split_id,
+            user_id: args.user_id,
+            fingerprint_sha256_hex: args.fingerprint_sha256_hex,
+          }),
+        buildSignedTx: async (args) => {
+          const built = await buildSignedAnchorTxDevnet(args);
+          return {
+            tx_signature: built.tx_signature,
+            recent_blockhash: built.recent_blockhash,
+            last_valid_block_height: built.last_valid_block_height,
+            raw_tx_base64: built.raw_tx_base64,
+          };
+        },
+        setPrepared: async (args) => {
+          const out = await rpcSetPreparedSolanaAnchorV12({
+            service,
+            split_id: args.split_id,
+            user_id: args.user_id,
+            fingerprint_sha256_hex: args.fingerprint_sha256_hex,
+            tx_signature: args.tx_signature,
+            recent_blockhash: args.recent_blockhash,
+            last_valid_block_height: args.last_valid_block_height,
+            raw_tx_base64: args.raw_tx_base64,
+          });
+          return { ok: out.ok, status: out.status };
+        },
+      });
+
+      if (prepared && (!prepared.persisted_ok || prepared.persisted_status !== "prepared")) {
+        return NextResponse.json(
+          { error: "Failed to persist solana_anchor prepared state", solana_anchor: { claim, prepared, gate } },
+          { status: 500 }
+        );
+      }
+
+      // Stage invariant:
+      // - never transition split -> active while anchor is only pending for this fingerprint.
+      // - observers seeing pending MUST NOT activate.
+      if (!gate.allowed) {
+        return NextResponse.json(
+          { error: "Activation blocked by solana_anchor gate", solana_anchor: { claim, prepared, gate } },
+          { status: 409 }
         );
       }
 
@@ -388,7 +468,29 @@ export async function PATCH(req: Request) {
         .eq("user_id", uid);
       if (actErr) return NextResponse.json({ error: actErr.message }, { status: 500 });
 
-      return NextResponse.json({ ok: true, status: "active" });
+      return NextResponse.json({
+        ok: true,
+        status: "active",
+        evidence: {
+          kind: canonicalPayload.kind,
+          v: canonicalPayload.v,
+          canonical_json,
+          fingerprint_sha256_hex,
+        },
+        solana_anchor: {
+          claim,
+          prepared: prepared
+            ? {
+                tx_signature: prepared.tx_signature,
+                recent_blockhash: prepared.recent_blockhash,
+                last_valid_block_height: prepared.last_valid_block_height,
+                raw_tx_base64: prepared.raw_tx_base64,
+              }
+            : null,
+          gate,
+          broadcast: { attempted: false },
+        },
+      });
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
