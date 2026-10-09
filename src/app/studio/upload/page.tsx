@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { validateWithGuardian } from "@/lib/guardianClient";
 import { getAccessToken } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabaseClient";
@@ -165,26 +164,30 @@ export default function UploadPage() {
       }
 
       // IA/stub: only Guardian precheck
-      const out = await validateWithGuardian({
-        stage: "D",
-        content: `Faixa: ${title} — Artista: ${artist}`,
-        metadata: {
-          tenant_id: "synora-audio-demo",
-          purpose: "music_upload_compliance_precheck",
-          source: "synora-audio",
-          locale: "pt-BR",
-          correlation_id: `AUD-${Date.now()}`,
-          content_type: "application/json",
-        },
-        request: {
-          operation: "upload_precheck",
-          scope: { fields: ["track.title", "track.artist"] },
-          subject: { trackId: "T-LOCAL" },
-          retention: "30d",
-          masking: true,
-        },
+      const res = await fetch("/api/guardian/validate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          stage: "D",
+          content: `Faixa: ${title} — Artista: ${artist}`,
+          metadata: {
+            tenant_id: "CREATORS-001",
+            purpose: "music_upload_compliance_precheck",
+            source: "synora-audio",
+            locale: "pt-BR",
+            correlation_id: `AUD-${Date.now()}`,
+            content_type: "application/json",
+          },
+          request: {
+            operation: "upload_precheck",
+            scope: { fields: ["track.title", "track.artist"] },
+            subject: { trackId: "T-LOCAL" },
+            retention: "30d",
+            masking: true,
+          },
+        }),
       });
-      setGuardianOut(out);
+      setGuardianOut(await res.json());
     } finally {
       setBusy(false);
     }

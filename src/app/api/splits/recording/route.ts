@@ -321,6 +321,9 @@ export async function PATCH(req: Request) {
         metadata: {
           product: "synora-audio",
           content_type: "recording_split_activation",
+          tenant_id: "CREATORS-001",
+          purpose: "split.activation",
+          event_name: "split.activation",
           correlation_id,
           user_id: uid,
           recording_id,

@@ -1,3 +1,5 @@
+import "server-only";
+
 export type GuardianDecision = {
   status: "APPROVED" | "APPROVED_WITH_ADJUSTMENTS" | "APPROVED_WITH_REDACTIONS" | "BLOCKED";
   risk_score?: number;
@@ -17,7 +19,6 @@ export async function validateWithGuardian(input: {
   debtor?: unknown;
   request?: unknown;
 }): Promise<GuardianDecision> {
-  // MVP: keep guardian optional. Fail-closed behavior should be enforced server-side in production.
   const rawUrl = process.env.NEXT_PUBLIC_GUARDIAN_URL;
   if (!rawUrl) {
     return {
@@ -25,6 +26,22 @@ export async function validateWithGuardian(input: {
       risk_score: 30,
       issues: [{ code: "GUARDIAN_NOT_CONFIGURED", message: "Guardian não configurado no ambiente" }],
       required_actions: ["Configurar NEXT_PUBLIC_GUARDIAN_URL"],
+    };
+  }
+
+  const key = process.env.SYNORA_GUARDIAN_KEY;
+  const tenantId = process.env.SYNORA_GUARDIAN_TENANT_ID;
+  if (!key || !tenantId) {
+    return {
+      status: "BLOCKED",
+      risk_score: 100,
+      issues: [
+        {
+          code: "GUARDIAN_AUTH_MISSING",
+          message: "Guardian auth ausente (SYNORA_GUARDIAN_KEY / SYNORA_GUARDIAN_TENANT_ID)",
+        },
+      ],
+      required_actions: ["Configurar secrets server-only do Guardian"],
     };
   }
 
@@ -40,7 +57,12 @@ export async function validateWithGuardian(input: {
   try {
     const res = await fetch(url, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        "X-Synora-Key": key,
+        "X-Synora-Tenant": tenantId,
+        "X-Synora-Stage": input.stage,
+      },
       body: JSON.stringify(input),
       signal: controller.signal,
       cache: "no-store",
