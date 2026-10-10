@@ -566,6 +566,7 @@ export async function PATCH(req: Request) {
           fingerprint_sha256_hex,
           tx_signature: broadcast.tx_signature,
           anchored_at: broadcast.anchored_at,
+          confirmation: broadcast.confirmation,
         });
 
         if (!(confirmed.ok && confirmed.status === "confirmed")) {

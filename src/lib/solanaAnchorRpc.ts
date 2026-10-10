@@ -93,6 +93,11 @@ export async function rpcSetConfirmedSolanaAnchorV12(input: {
   fingerprint_sha256_hex: string;
   tx_signature: string;
   anchored_at: string;
+  confirmation: {
+    slot: number;
+    err: unknown | null;
+    confirmationStatus: string | null;
+  };
 }): Promise<SetConfirmedSolanaAnchorV12Result> {
   const {
     service,
@@ -101,6 +106,7 @@ export async function rpcSetConfirmedSolanaAnchorV12(input: {
     fingerprint_sha256_hex,
     tx_signature,
     anchored_at,
+    confirmation,
   } = input;
 
   const { data, error } = await service.rpc(
@@ -111,6 +117,7 @@ export async function rpcSetConfirmedSolanaAnchorV12(input: {
       p_fingerprint_sha256_hex: fingerprint_sha256_hex,
       p_tx_signature: tx_signature,
       p_anchored_at: anchored_at,
+      p_confirmation: confirmation,
     },
   );
 
