@@ -34,7 +34,7 @@ export async function GET(req: Request) {
 
     const { data: splits, error: sErr } = await service
       .from("recording_splits")
-      .select("id,recording_id,version,status,created_at")
+      .select("id,recording_id,version,status,created_at,meta")
       .eq("user_id", uid)
       .eq("recording_id", recordingId)
       .order("version", { ascending: false })

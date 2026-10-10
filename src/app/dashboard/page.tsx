@@ -409,6 +409,11 @@ export default function Dashboard() {
   const [loadedSplitInfo, setLoadedSplitInfo] = useState<string | null>(null);
   const [loadedSplitId, setLoadedSplitId] = useState<string | null>(null);
   const [loadedSplitStatus, setLoadedSplitStatus] = useState<string | null>(null);
+  const [loadedSplitOnchain, setLoadedSplitOnchain] = useState<{
+    txSignature: string;
+    slot: number | null;
+    confirmationStatus: string | null;
+  } | null>(null);
   const [proposeLinks, setProposeLinks] = useState<Array<{ email: string; url: string }> | null>(null);
 
   const [acceptances, setAcceptances] = useState<
@@ -1122,6 +1127,7 @@ export default function Dashboard() {
       setLoadedSplitInfo(null);
       setLoadedSplitId(null);
       setLoadedSplitStatus(null);
+      setLoadedSplitOnchain(null);
       setProposeLinks(null);
       setSplitError(null);
       try {
@@ -1130,7 +1136,22 @@ export default function Dashboard() {
           cache: "no-store",
         });
         const j = (await res.json()) as {
-          latest_split?: { id: string; version: number; status: string } | null;
+          latest_split?: {
+            id: string;
+            version: number;
+            status: string;
+            meta?: {
+              solana_anchor?: {
+                status?: string;
+                tx_signature?: string;
+                confirmation?: {
+                  slot?: number;
+                  err?: unknown | null;
+                  confirmationStatus?: string | null;
+                };
+              };
+            } | null;
+          } | null;
           items?: Array<{ party_id: string; role: string; share_bps: number } & { party?: { display_name?: string } | null }>;
           error?: string;
         };
@@ -1147,11 +1168,33 @@ export default function Dashboard() {
           setLoadedSplitId(j.latest_split.id);
           setLoadedSplitStatus(j.latest_split.status);
           setLoadedSplitInfo(`Split carregado: v${j.latest_split.version} (${j.latest_split.status})`);
+
+          const anchor = j.latest_split.meta?.solana_anchor;
+          const confirmation = anchor?.confirmation;
+          const verifiedOnchain =
+            anchor?.status === "confirmed" &&
+            typeof anchor.tx_signature === "string" &&
+            anchor.tx_signature.length > 0 &&
+            typeof confirmation?.slot === "number" &&
+            confirmation.slot >= 0 &&
+            confirmation.err == null;
+
+          setLoadedSplitOnchain(
+            verifiedOnchain
+              ? {
+                  txSignature: anchor.tx_signature!,
+                  slot: confirmation?.slot ?? null,
+                  confirmationStatus: confirmation?.confirmationStatus ?? null,
+                }
+              : null,
+          );
+
           // If already proposed/active, show current acceptance statuses.
           await refreshAcceptances(token, j.latest_split.id);
         } else {
           setLoadedSplitInfo("Nenhum split salvo ainda para este recording.");
           setLoadedSplitStatus(null);
+          setLoadedSplitOnchain(null);
           setAcceptances([]);
         }
       } catch (e: unknown) {
@@ -2551,6 +2594,26 @@ export default function Dashboard() {
                 {!canActivateSplit && loadedSplitStatus !== "active" && acceptances.length > 0 ? (
                   <div className="mt-2 text-slate-300">
                     Para ativar: 100% das acceptances precisam estar em <span className="text-emerald-200">accepted</span>.
+                  </div>
+                ) : null}
+
+                {loadedSplitOnchain ? (
+                  <div className="mt-3 rounded-md bg-emerald-500/10 p-3 ring-1 ring-emerald-400/30">
+                    <div className="font-semibold text-emerald-200">✓ Verificado on-chain</div>
+                    <div className="mt-1 text-slate-300">
+                      Solana Devnet · slot {loadedSplitOnchain.slot}
+                      {loadedSplitOnchain.confirmationStatus
+                        ? ` · ${loadedSplitOnchain.confirmationStatus}`
+                        : ""}
+                    </div>
+                    <a
+                      href={`https://explorer.solana.com/tx/${loadedSplitOnchain.txSignature}?cluster=devnet`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 inline-block text-emerald-200 hover:underline"
+                    >
+                      Ver transação no Solana Explorer
+                    </a>
                   </div>
                 ) : null}
 
