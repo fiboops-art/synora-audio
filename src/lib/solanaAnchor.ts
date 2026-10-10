@@ -176,3 +176,101 @@ export async function anchorFingerprintToSolanaDevnet(input: {
     explorer_url,
   };
 }
+
+export type SolanaBroadcastPreparedResult = {
+  network: "devnet";
+  tx_signature: string;
+  confirmation: {
+    slot: number;
+    err: unknown | null;
+    confirmationStatus: string | null;
+  };
+  anchored_at: string;
+  explorer_url: string;
+};
+
+export async function broadcastPreparedAnchorTxDevnet(input: {
+  raw_tx_base64: string;
+  tx_signature: string;
+  recent_blockhash: string;
+  last_valid_block_height: number;
+}): Promise<SolanaBroadcastPreparedResult> {
+  const rpcUrl = (process.env.SOLANA_RPC_URL ?? "").trim();
+  invariant(rpcUrl, "Missing SOLANA_RPC_URL");
+
+  const raw = Buffer.from((input.raw_tx_base64 ?? "").trim(), "base64");
+  invariant(raw.length > 0, "raw_tx_base64 decoded empty");
+
+  const expectedSignature = (input.tx_signature ?? "").trim();
+  invariant(expectedSignature.length > 0, "Missing tx_signature");
+
+  const connection = new Connection(rpcUrl, "confirmed");
+
+  const genesisHash = await connection.getGenesisHash();
+  invariant(
+    genesisHash === DEVNET_GENESIS_HASH,
+    `RPC is not devnet (genesisHash=${genesisHash})`,
+  );
+
+  const wireSignature = await connection.sendRawTransaction(raw, {
+    skipPreflight: false,
+    maxRetries: 3,
+  });
+
+  invariant(
+    wireSignature === expectedSignature,
+    `Broadcast signature mismatch: expected=${expectedSignature} actual=${wireSignature}`,
+  );
+
+  const confirmation = await connection.confirmTransaction(
+    {
+      signature: expectedSignature,
+      blockhash: input.recent_blockhash,
+      lastValidBlockHeight: input.last_valid_block_height,
+    },
+    "confirmed",
+  );
+
+  invariant(
+    confirmation.value.err === null,
+    "Transaction confirmed with error",
+  );
+
+  const status = await connection.getSignatureStatus(expectedSignature, {
+    searchTransactionHistory: true,
+  });
+
+  const slot = status?.value?.slot ?? -1;
+  invariant(slot >= 0, "Transaction not confirmed (missing slot)");
+
+  return {
+    network: "devnet",
+    tx_signature: expectedSignature,
+    confirmation: {
+      slot,
+      err: status?.value?.err ?? null,
+      confirmationStatus: status?.value?.confirmationStatus ?? null,
+    },
+    anchored_at: new Date().toISOString(),
+    explorer_url: `https://explorer.solana.com/tx/${expectedSignature}?cluster=devnet`,
+  };
+}
+
+export async function isPreparedAnchorBlockhashExpiredDevnet(input: {
+  last_valid_block_height: number;
+}): Promise<boolean> {
+  const rpcUrl = (process.env.SOLANA_RPC_URL ?? "").trim();
+  invariant(rpcUrl, "Missing SOLANA_RPC_URL");
+
+  const connection = new Connection(rpcUrl, "confirmed");
+
+  const genesisHash = await connection.getGenesisHash();
+  invariant(
+    genesisHash === DEVNET_GENESIS_HASH,
+    `RPC is not devnet (genesisHash=${genesisHash})`,
+  );
+
+  const currentBlockHeight = await connection.getBlockHeight("confirmed");
+
+  return currentBlockHeight > input.last_valid_block_height;
+}

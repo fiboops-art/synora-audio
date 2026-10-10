@@ -3,8 +3,8 @@ import { getSupabaseService } from "@/lib/supabaseServer";
 import crypto from "crypto";
 import { validateWithGuardian } from "@/lib/guardianClient";
 import { buildSplitActivationCanonicalPayloadV1, canonicalJsonString, sha256Hex } from "@/lib/splitActivationCanonical";
-import { buildSignedAnchorTxDevnet } from "@/lib/solanaAnchor";
-import { rpcClaimSolanaAnchorV12, rpcSetPreparedSolanaAnchorV12 } from "@/lib/solanaAnchorRpc";
+import { buildSignedAnchorTxDevnet, broadcastPreparedAnchorTxDevnet, isPreparedAnchorBlockhashExpiredDevnet } from "@/lib/solanaAnchor";
+import { rpcClaimSolanaAnchorV12, rpcSetPreparedSolanaAnchorV12, rpcSetConfirmedSolanaAnchorV12, rpcSetRecoverySolanaAnchorV12, rpcRetrySolanaAnchorFromExpiredV12 } from "@/lib/solanaAnchorRpc";
 import { prepareSolanaAnchorPreparedBeforeBroadcast } from "@/lib/solanaAnchorActivate";
 
 export const runtime = "nodejs";
@@ -424,14 +424,173 @@ export async function PATCH(req: Request) {
         );
       }
 
-      // Stage invariant:
-      // - never transition split -> active while anchor is only pending for this fingerprint.
-      // - observers seeing pending MUST NOT activate.
+      // Final invariant: only CONFIRMED Solana evidence may proceed to split activation.
       if (!gate.allowed) {
         return NextResponse.json(
-          { error: "Activation blocked by solana_anchor gate", solana_anchor: { claim, prepared, gate } },
+          {
+            error: "Activation blocked by solana_anchor gate",
+            solana_anchor: { claim, prepared, gate },
+          },
           { status: 409 }
         );
+      }
+
+      let confirmedAnchor:
+        | {
+            tx_signature: string;
+            anchored_at: string;
+            slot: number | null;
+            confirmation_status: string | null;
+            explorer_url: string | null;
+          }
+        | null = null;
+
+      if (claim.status === "confirmed") {
+        if (!claim.tx_signature || !claim.anchored_at) {
+          return NextResponse.json(
+            {
+              error: "Confirmed solana_anchor is incomplete",
+              solana_anchor: { claim, prepared, gate },
+            },
+            { status: 500 }
+          );
+        }
+
+        confirmedAnchor = {
+          tx_signature: claim.tx_signature,
+          anchored_at: claim.anchored_at,
+          slot: null,
+          confirmation_status: "confirmed",
+          explorer_url: `https://explorer.solana.com/tx/${claim.tx_signature}?cluster=devnet`,
+        };
+      } else {
+        const tx = prepared
+          ? {
+              tx_signature: prepared.tx_signature,
+              recent_blockhash: prepared.recent_blockhash,
+              last_valid_block_height: prepared.last_valid_block_height,
+              raw_tx_base64: prepared.raw_tx_base64,
+            }
+          : claim.status === "prepared"
+            ? {
+                tx_signature: claim.tx_signature,
+                recent_blockhash: claim.recent_blockhash,
+                last_valid_block_height: claim.last_valid_block_height,
+                raw_tx_base64: claim.raw_tx_base64,
+              }
+            : null;
+
+        if (
+          !tx ||
+          !tx.tx_signature ||
+          !tx.recent_blockhash ||
+          tx.last_valid_block_height == null ||
+          !tx.raw_tx_base64
+        ) {
+          return NextResponse.json(
+            {
+              error: "Prepared solana_anchor is incomplete",
+              solana_anchor: { claim, prepared, gate },
+            },
+            { status: 500 }
+          );
+        }
+
+        const expired = await isPreparedAnchorBlockhashExpiredDevnet({
+          last_valid_block_height: tx.last_valid_block_height,
+        });
+
+        if (expired) {
+          const recovery = await rpcSetRecoverySolanaAnchorV12({
+            service,
+            split_id,
+            user_id: uid,
+            fingerprint_sha256_hex,
+            tx_signature: tx.tx_signature,
+            to_status: "expired",
+            err: null,
+          });
+
+          if (!(recovery.ok && recovery.status === "expired")) {
+            return NextResponse.json(
+              {
+                error: "Failed to mark expired solana_anchor",
+                solana_anchor: {
+                  claim,
+                  prepared,
+                  gate,
+                  recovery,
+                },
+              },
+              { status: 409 }
+            );
+          }
+
+          const retry = await rpcRetrySolanaAnchorFromExpiredV12({
+            service,
+            split_id,
+            user_id: uid,
+            fingerprint_sha256_hex,
+            prev_tx_signature: tx.tx_signature,
+            prev_recent_blockhash: tx.recent_blockhash,
+            prev_last_valid_block_height: tx.last_valid_block_height,
+          });
+
+          return NextResponse.json(
+            {
+              error: "Solana anchor expired; retry prepared",
+              retryable: retry.ok && retry.status === "pending",
+              solana_anchor: {
+                claim,
+                prepared,
+                gate,
+                recovery,
+                retry,
+              },
+            },
+            { status: 409 }
+          );
+        }
+
+        const broadcast = await broadcastPreparedAnchorTxDevnet({
+          raw_tx_base64: tx.raw_tx_base64,
+          tx_signature: tx.tx_signature,
+          recent_blockhash: tx.recent_blockhash,
+          last_valid_block_height: tx.last_valid_block_height,
+        });
+
+        const confirmed = await rpcSetConfirmedSolanaAnchorV12({
+          service,
+          split_id,
+          user_id: uid,
+          fingerprint_sha256_hex,
+          tx_signature: broadcast.tx_signature,
+          anchored_at: broadcast.anchored_at,
+        });
+
+        if (!(confirmed.ok && confirmed.status === "confirmed")) {
+          return NextResponse.json(
+            {
+              error: "Solana transaction confirmed but persistence failed",
+              solana_anchor: {
+                claim,
+                prepared,
+                gate,
+                broadcast,
+                confirmed,
+              },
+            },
+            { status: 500 }
+          );
+        }
+
+        confirmedAnchor = {
+          tx_signature: broadcast.tx_signature,
+          anchored_at: broadcast.anchored_at,
+          slot: broadcast.confirmation.slot,
+          confirmation_status: broadcast.confirmation.confirmationStatus,
+          explorer_url: broadcast.explorer_url,
+        };
       }
 
       // Supersede previous active splits for this recording
@@ -491,7 +650,12 @@ export async function PATCH(req: Request) {
               }
             : null,
           gate,
-          broadcast: { attempted: false },
+          confirmed: confirmedAnchor,
+          broadcast: {
+            attempted: claim.status !== "confirmed",
+            tx_signature: confirmedAnchor?.tx_signature ?? null,
+            explorer_url: confirmedAnchor?.explorer_url ?? null,
+          },
         },
       });
     }
