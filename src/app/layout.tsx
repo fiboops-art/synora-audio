@@ -75,7 +75,7 @@ export default function RootLayout({
                 rel="noopener noreferrer"
                 className="transition-colors hover:text-slate-50"
               >
-                🇧🇷 Brasil · +55 48 99917-2077
+                Brasil · +55 48 99917-2077
               </a>
 
               <a
@@ -84,7 +84,7 @@ export default function RootLayout({
                 rel="noopener noreferrer"
                 className="transition-colors hover:text-slate-50"
               >
-                🇦🇷 Argentina · +54 9 2302 50-1535
+                Argentina · +54 9 2302 50-1535
               </a>
             </div>
           </div>
