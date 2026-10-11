@@ -58,8 +58,35 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col text-slate-50">
         <div className="flex-1">{children}</div>
         <footer className="mx-auto w-full max-w-6xl px-4 py-8">
-          <div className="text-center text-xs text-slate-300/80">
-            Synora — by Fiboops
+          <div className="flex flex-col items-center gap-2 text-center text-xs text-slate-300/80">
+            <div>Synora — by Fiboops</div>
+
+            <a
+              href="mailto:hello@synora.app.br"
+              className="transition-colors hover:text-slate-50"
+            >
+              hello@synora.app.br
+            </a>
+
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+              <a
+                href="https://wa.me/5548999172077"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition-colors hover:text-slate-50"
+              >
+                🇧🇷 Brasil · +55 48 99917-2077
+              </a>
+
+              <a
+                href="https://wa.me/5492302501535"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition-colors hover:text-slate-50"
+              >
+                🇦🇷 Argentina · +54 9 2302 50-1535
+              </a>
+            </div>
           </div>
         </footer>
       </body>
