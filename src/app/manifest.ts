@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Synora Audio",
-    short_name: "Synora Audio",
+    name: "Synora Creators",
+    short_name: "Synora Creators",
     description: "Infraestrutura para creators de música IA",
     start_url: "/",
     display: "standalone",

@@ -1,5 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { getSupabase } from "@/lib/supabaseClient";
 
 function Header() {
   return (
@@ -15,7 +20,7 @@ function Header() {
         />
         <div>
           <div className="text-sm font-semibold leading-tight text-slate-50">
-            Synora Audio
+            Synora Creators
           </div>
           <div className="text-sm text-slate-200">
             Infraestrutura para creators de música IA
@@ -42,6 +47,23 @@ function Header() {
 }
 
 export default function Home() {
+  const router = useRouter();
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const supabase = getSupabase();
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        router.replace("/login");
+        return;
+      }
+      setChecked(true);
+    })();
+  }, [router]);
+
+  if (!checked) return null;
+
   return (
     <main>
       <Header />
@@ -53,7 +75,7 @@ export default function Home() {
               Distribuição, monetização e compliance — para música IA.
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-slate-800">
-              A Synora Audio não é um streaming. É a camada de infraestrutura entre o
+              A Synora Creators não é um streaming. É a camada de infraestrutura entre o
               creator e as plataformas: valida (Guardian), organiza metadata,
               prepara distribuição e consolida status e indicadores.
             </p>

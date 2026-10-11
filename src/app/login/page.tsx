@@ -49,7 +49,7 @@ export default function LoginPage() {
       <div className="syn-card p-7">
         <div className="text-sm font-semibold">Entrar</div>
         <div className="mt-1 text-sm text-slate-200/90">
-          Receba um link mágico por email para acessar o Synora Audio.
+          Receba um link mágico por email para acessar o Synora Creators.
         </div>
 
         <div className="mt-5">
