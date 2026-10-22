@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabaseClient";
 import { getAccessToken } from "@/lib/auth";
+import { ensureOnboardingInitialized } from "@/lib/onboarding";
 
 type Track = {
   id: string;
@@ -176,6 +177,12 @@ export default function LibraryPage() {
       const { data: sess } = await supabase.auth.getSession();
       if (!sess.session) {
         router.replace("/login");
+        return;
+      }
+
+      const state = await ensureOnboardingInitialized();
+      if (state && !state.onboarding.completed_at && state.onboarding.current_step !== 4) {
+        router.replace("/onboarding");
         return;
       }
 

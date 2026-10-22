@@ -105,14 +105,14 @@ export async function POST(req: Request) {
     }
 
     // guardian validate
-    const correlation_id = `AUD-${Date.now()}`;
+    const correlation_id = crypto.randomUUID();
     const guardianInput = {
       // Synora-Audio is not a debt/proposal flow.
       // Use Stage A (onboarding/LGPD validation) to avoid proposal-specific rules.
       stage: "A",
       content: `Faixa: ${title} — Artista: ${artist}`,
       metadata: {
-        tenant_id: "synora-audio-demo",
+        tenant_id: "CREATORS-001",
         purpose: "music_upload_compliance_precheck",
         source: "synora-audio",
         locale: "pt-BR",

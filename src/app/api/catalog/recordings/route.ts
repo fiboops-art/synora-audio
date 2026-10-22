@@ -27,7 +27,7 @@ export async function GET(req: Request) {
 
     const { data, error } = await service
       .from("recordings")
-      .select("id,isrc,track_title,artist_name,created_at")
+      .select("id,track_id,isrc,track_title,artist_name,created_at")
       .eq("user_id", uid)
       .order("created_at", { ascending: false })
       .limit(limit);
@@ -45,25 +45,53 @@ export async function POST(req: Request) {
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
     if (!token) return NextResponse.json({ error: "Missing Authorization" }, { status: 401 });
 
-    const body = (await req.json()) as { isrc?: string | null; track_title?: string | null; artist_name?: string | null };
+    const body = (await req.json()) as {
+      track_id?: string | null;
+      isrc?: string | null;
+      track_title?: string | null;
+      artist_name?: string | null;
+    };
 
     const service = getSupabaseService();
     const { data: userData, error: userErr } = await service.auth.getUser(token);
     if (userErr || !userData.user) return NextResponse.json({ error: "Invalid session" }, { status: 401 });
     const uid = userData.user.id;
 
+    const track_id = (body.track_id ?? "").trim() || null;
     const isrc = (body.isrc ?? "").trim() || null;
     const track_title = (body.track_title ?? "").trim() || null;
     const artist_name = (body.artist_name ?? "").trim() || null;
 
-    if (!isrc && !track_title) {
-      return NextResponse.json({ error: "Provide isrc or track_title" }, { status: 400 });
+    if (!isrc && !track_title && !track_id) {
+      return NextResponse.json({ error: "Provide track_id, isrc or track_title" }, { status: 400 });
+    }
+
+    if (track_id) {
+      const { data: track, error: trackErr } = await service
+        .from("tracks")
+        .select("id")
+        .eq("id", track_id)
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      if (trackErr) return NextResponse.json({ error: trackErr.message }, { status: 500 });
+      if (!track) return NextResponse.json({ error: "Track not found" }, { status: 404 });
+
+      const { data: existing, error: existingErr } = await service
+        .from("recordings")
+        .select("id,track_id,isrc,track_title,artist_name,created_at")
+        .eq("user_id", uid)
+        .eq("track_id", track_id)
+        .maybeSingle();
+
+      if (existingErr) return NextResponse.json({ error: existingErr.message }, { status: 500 });
+      if (existing) return NextResponse.json({ recording: existing });
     }
 
     const { data, error } = await service
       .from("recordings")
-      .insert({ user_id: uid, isrc, track_title, artist_name })
-      .select("id,isrc,track_title,artist_name,created_at")
+      .insert({ user_id: uid, track_id, isrc, track_title, artist_name })
+      .select("id,track_id,isrc,track_title,artist_name,created_at")
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

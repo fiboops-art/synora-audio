@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getAccessToken } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabaseClient";
+import { ensureOnboardingInitialized, setOnboarding } from "@/lib/onboarding";
 
 type GuardianLike = {
   status?: string;
@@ -30,7 +31,16 @@ export default function UploadPage() {
     (async () => {
       const supabase = getSupabase();
       const { data } = await supabase.auth.getSession();
-      if (!data.session) router.replace("/login");
+      if (!data.session) {
+        router.replace("/login");
+        return;
+      }
+
+      const state = await ensureOnboardingInitialized();
+      if (!state) return;
+      if (!state.onboarding.completed_at && state.onboarding.current_step !== 2) {
+        router.replace("/onboarding");
+      }
     })();
   }, [router]);
 
@@ -159,7 +169,22 @@ export default function UploadPage() {
           setGuardianOut(fin);
           return;
         }
-        setGuardianOut((fin as { guardian?: unknown }).guardian ?? fin);
+        const guardian = (fin as { guardian?: GuardianLike }).guardian;
+        setGuardianOut(guardian ?? fin);
+
+        if (guardian?.status === "BLOCKED") {
+          return;
+        }
+
+        const state = await ensureOnboardingInitialized();
+        if (state && !state.onboarding.completed_at && state.onboarding.current_step === 2) {
+          await setOnboarding({
+            current_step: 3,
+            track_id: savedTrackId,
+          });
+          router.replace("/onboarding/rights");
+          return;
+        }
         return;
       }
 

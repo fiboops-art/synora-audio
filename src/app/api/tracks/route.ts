@@ -40,6 +40,7 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const view = (url.searchParams.get("view") ?? "active").toLowerCase();
     const wantTrashed = view === "trash" || view === "trashed";
+    const trackId = (url.searchParams.get("id") ?? "").trim() || null;
 
     const auth = req.headers.get("authorization") || "";
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
@@ -64,6 +65,10 @@ export async function GET(req: Request) {
       .order("created_at", { ascending: false });
 
     q = wantTrashed ? q.not("deleted_at", "is", null) : q.is("deleted_at", null);
+
+    if (trackId) {
+      q = q.eq("id", trackId);
+    }
 
     const { data, error } = await q;
 

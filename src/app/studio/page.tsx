@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabaseClient";
+import { ensureOnboardingInitialized } from "@/lib/onboarding";
 
 export default function StudioHome() {
   const router = useRouter();
@@ -12,7 +13,17 @@ export default function StudioHome() {
     (async () => {
       const supabase = getSupabase();
       const { data } = await supabase.auth.getSession();
-      if (!data.session) router.replace("/login");
+      if (!data.session) {
+        router.replace("/login");
+        return;
+      }
+
+      const state = await ensureOnboardingInitialized();
+      if (!state) return;
+      if (!state.onboarding.completed_at) {
+        router.replace("/onboarding");
+        return;
+      }
     })();
   }, [router]);
 

@@ -15,7 +15,7 @@ export default function LoginPage() {
     (async () => {
       const supabase = getSupabase();
       const { data } = await supabase.auth.getSession();
-      if (data.session) router.replace("/studio");
+      if (data.session) router.replace("/dashboard");
     })();
   }, [router]);
 
@@ -28,7 +28,7 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
-          emailRedirectTo: `${origin}/studio`,
+          emailRedirectTo: `${origin}/dashboard`,
         },
       });
       if (error) throw error;

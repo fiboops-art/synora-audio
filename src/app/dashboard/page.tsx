@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabaseClient";
+import { ensureOnboardingInitialized } from "@/lib/onboarding";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -506,6 +507,16 @@ export default function Dashboard() {
       const { data } = await supabase.auth.getSession();
       if (!data.session) {
         router.replace("/login");
+        return;
+      }
+
+      const state = await ensureOnboardingInitialized();
+      if (!state) {
+        router.replace("/login");
+        return;
+      }
+      if (!state.onboarding.completed_at) {
+        router.replace("/onboarding");
         return;
       }
       setSessionToken(data.session.access_token);
@@ -1274,7 +1285,7 @@ export default function Dashboard() {
     <main className="mx-auto w-full max-w-6xl px-4 py-8">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-sm font-semibold text-white">Dashboard (Fase 1)</div>
+          <div className="text-sm font-semibold text-white">Dashboard</div>
           <div className="text-sm text-slate-200/90">
             Status operacional: uploads, Guardian e distribuição.
           </div>
@@ -1294,19 +1305,19 @@ export default function Dashboard() {
         <div className="syn-card p-6">
           <div className="text-xs text-slate-300">Uploads hoje</div>
           <div className="mt-1 text-2xl font-semibold text-white">1</div>
-          <div className="mt-2 text-xs text-slate-300/80">MVP: contadores estáticos.</div>
+          <div className="mt-2 text-xs text-slate-300/80">Contadores operacionais.</div>
         </div>
         <div className="syn-card p-6">
           <div className="text-xs text-slate-300">Guardian</div>
           <div className="mt-1 text-2xl font-semibold text-white">Online</div>
           <div className="mt-2 text-xs text-slate-300/80">
-            Configure <code className="rounded bg-white/10 px-1 py-0.5 ring-1 ring-white/10">NEXT_PUBLIC_GUARDIAN_URL</code>
+            Validação e governança ativas.
           </div>
         </div>
         <div className="syn-card p-6">
           <div className="text-xs text-slate-300">Distribuição</div>
-          <div className="mt-1 text-2xl font-semibold text-white">Stub</div>
-          <div className="mt-2 text-xs text-slate-300/80">Integração DSP fica para fase 2.</div>
+          <div className="mt-1 text-2xl font-semibold text-white">Em preparação</div>
+          <div className="mt-2 text-xs text-slate-300/80">Integração DSP em preparação.</div>
         </div>
       </div>
 
@@ -1337,7 +1348,7 @@ export default function Dashboard() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="text-sm font-semibold text-white">Split → Ledger — Timeline</div>
-            <div className="text-sm text-slate-200/90">Guia rápido do fluxo operacional (MVP).</div>
+            <div className="text-sm text-slate-200/90">Guia rápido do fluxo operacional.</div>
           </div>
           <div className="text-xs text-slate-300">Passo atual: {splitFlowStep}/5</div>
         </div>
@@ -2013,19 +2024,10 @@ export default function Dashboard() {
         </div>
       ) : null}
 
-      <div className="mt-6 syn-card-soft p-6">
-        <div className="text-sm font-semibold text-white">Próximos passos (dev)</div>
-        <ul className="mt-3 list-disc pl-5 text-sm text-slate-200/90">
-          <li>Persistência: salvar faixas em banco (Postgres) + storage (R2/S3).</li>
-          <li>Guardian Stage específico para música (copyright/similaridade + provenance).</li>
-          <li>Fila async de distribuição (Skipper) + status por DSP.</li>
-        </ul>
-      </div>
-
       <div className="mt-6 syn-card p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="text-sm font-semibold text-white">Royalties (MVP) — Import CSV</div>
+            <div className="text-sm font-semibold text-white">Royalties — Import CSV</div>
             <div className="text-sm text-slate-200/90">
               CSV-first, API-ready. Normaliza números, aplica FX (ECB→USD), cria statement e linhas com audit trail.
             </div>
@@ -2152,7 +2154,7 @@ export default function Dashboard() {
       </div>
 
       <div className="mt-6 syn-card p-6">
-        <div className="text-sm font-semibold text-white">Rights (MVP) — Parties</div>
+        <div className="text-sm font-semibold text-white">Rights — Parties</div>
         <div className="mt-1 text-sm text-slate-200/90">Quem recebe (autores, produtores, intérpretes, selo…).</div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -2229,8 +2231,8 @@ export default function Dashboard() {
       </div>
 
       <div className="mt-6 syn-card p-6">
-        <div className="text-sm font-semibold text-white">Payout Destinations (Fase 2) — PIX/BANK</div>
-        <div className="mt-1 text-sm text-slate-200/90">Cadastre destinos reutilizáveis e verifique manualmente (MVP).</div>
+        <div className="text-sm font-semibold text-white">Payout Destinations — PIX/BANK</div>
+        <div className="mt-1 text-sm text-slate-200/90">Cadastre destinos reutilizáveis e verifique manualmente.</div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <div className="rounded-md bg-black/30 p-4 ring-1 ring-white/10">
@@ -2440,7 +2442,7 @@ export default function Dashboard() {
       </div>
 
       <div id="splits" className="mt-6 syn-card p-6">
-        <div className="text-sm font-semibold text-white">Rights (MVP) — Recording Splits (draft)</div>
+        <div className="text-sm font-semibold text-white">Rights — Recording Splits (draft)</div>
         <div className="mt-1 text-sm text-slate-200/90">Define como o Master será distribuído (bps = 10000 = 100%).</div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -2771,7 +2773,7 @@ export default function Dashboard() {
       <div className="mt-6 syn-card p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="text-sm font-semibold text-white">Catalog (MVP) — Recordings (Master)</div>
+            <div className="text-sm font-semibold text-white">Catalog — Recordings (Master)</div>
             <div className="text-sm text-slate-200/90">Registry mínimo pra matching ISRC exact.</div>
           </div>
           <button

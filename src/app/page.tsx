@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabaseClient";
+import { ensureOnboardingInitialized } from "@/lib/onboarding";
 
 function Header() {
   return (
@@ -58,6 +59,26 @@ export default function Home() {
         router.replace("/login");
         return;
       }
+      const state = await ensureOnboardingInitialized();
+      if (!state) {
+        router.replace("/login");
+        return;
+      }
+      if (state.onboarding.completed_at) {
+        router.replace("/dashboard");
+        return;
+      }
+      if (state.onboarding.current_step > 1) {
+        const map: Record<number, string> = {
+          2: "/onboarding/asset",
+          3: "/onboarding/rights",
+          4: "/onboarding/library",
+          5: "/onboarding/done",
+        };
+        router.replace(map[state.onboarding.current_step] ?? "/onboarding");
+        return;
+      }
+      router.replace("/onboarding");
       setChecked(true);
     })();
   }, [router]);
