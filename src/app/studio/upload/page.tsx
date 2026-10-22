@@ -188,10 +188,19 @@ export default function UploadPage() {
         return;
       }
 
-      // IA/stub: only Guardian precheck
+      // IA/stub: authenticated Guardian precheck
+      const token = await getAccessToken();
+      if (!token) {
+        setGuardianOut({ error: "Sessão expirada. Faça login novamente." });
+        return;
+      }
+
       const res = await fetch("/api/guardian/validate", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           stage: "D",
           content: `Faixa: ${title} — Artista: ${artist}`,

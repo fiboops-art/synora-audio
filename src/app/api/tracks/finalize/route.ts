@@ -89,20 +89,30 @@ export async function POST(req: Request) {
     }
     const uid = userData.user.id;
 
-    // fetch basic track info (fallback if title/artist not sent)
-    let title = (body.title ?? "").trim();
-    let artist = (body.artist ?? "").trim();
-    if (!title || !artist) {
-      const { data: row, error: getErr } = await supabase
-        .from("tracks")
-        .select("title,artist")
-        .eq("id", body.trackId)
-        .eq("user_id", uid)
-        .single();
-      if (getErr) return NextResponse.json({ error: getErr.message }, { status: 500 });
-      title = row?.title ?? title;
-      artist = row?.artist ?? artist;
+    // Verify track ownership before Guardian or any state change.
+    const { data: ownedTrack, error: getErr } = await supabase
+      .from("tracks")
+      .select("id,title,artist")
+      .eq("id", body.trackId)
+      .eq("user_id", uid)
+      .maybeSingle();
+
+    if (getErr) {
+      return NextResponse.json({ error: getErr.message }, { status: 500 });
     }
+
+    if (!ownedTrack) {
+      return NextResponse.json({ error: "Track not found" }, { status: 404 });
+    }
+
+    // start-upload creates paths as: <uid>/<trackId>/<timestamp>-<filename>
+    const expectedPrefix = `${uid}/${body.trackId}/`;
+    if (!body.path.startsWith(expectedPrefix)) {
+      return NextResponse.json({ error: "Invalid storage path" }, { status: 400 });
+    }
+
+    const title = (body.title ?? "").trim() || ownedTrack.title || "";
+    const artist = (body.artist ?? "").trim() || ownedTrack.artist || "";
 
     // guardian validate
     const correlation_id = crypto.randomUUID();
