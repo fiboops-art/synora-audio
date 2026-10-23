@@ -9,6 +9,9 @@ import { ensureOnboardingInitialized } from "@/lib/onboarding";
 export default function Dashboard() {
   const router = useRouter();
   const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [sessionEmail, setSessionEmail] = useState<string | null>(null);
+  const [sessionDisplayName, setSessionDisplayName] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
   const [statements, setStatements] = useState<
     Array<{
       id: string;
@@ -519,7 +522,25 @@ export default function Dashboard() {
         router.replace("/onboarding");
         return;
       }
+      setSessionEmail(data.session.user.email ?? null);
       setSessionToken(data.session.access_token);
+
+      try {
+        const profileRes = await fetch("/api/profile", {
+          headers: {
+            authorization: `Bearer ${data.session.access_token}`,
+          },
+        });
+
+        if (profileRes.ok) {
+          const profileData = (await profileRes.json()) as {
+            profile?: { display_name?: string | null } | null;
+          };
+          setSessionDisplayName(profileData.profile?.display_name?.trim() || null);
+        }
+      } catch {
+        setSessionDisplayName(null);
+      }
     })();
   }, [router]);
 
@@ -1281,6 +1302,24 @@ export default function Dashboard() {
     }
   }
 
+  const handleSignOut = async () => {
+    if (signingOut) return;
+
+    setSigningOut(true);
+
+    try {
+      const supabase = getSupabase();
+      await supabase.auth.signOut();
+      setSessionToken(null);
+      setSessionEmail(null);
+      setSessionDisplayName(null);
+      router.replace("/login");
+      router.refresh();
+    } finally {
+      setSigningOut(false);
+    }
+  };
+
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-8">
       <div className="flex items-center justify-between">
@@ -1290,14 +1329,43 @@ export default function Dashboard() {
             Status operacional: uploads, Guardian e distribuição.
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Link href="/" className="text-sm text-slate-200 hover:text-white">
-            Home
-          </Link>
-          <span className="text-slate-300">•</span>
-          <Link href="/studio" className="text-sm text-slate-200 hover:text-white">
-            Studio
-          </Link>
+        <div className="flex items-center gap-5">
+          <div className="flex items-center gap-2">
+            <Link href="/" className="text-sm text-slate-200 hover:text-white">
+              Home
+            </Link>
+            <span className="text-slate-300">•</span>
+            <Link href="/studio" className="text-sm text-slate-200 hover:text-white">
+              Studio
+            </Link>
+          </div>
+
+          {sessionToken && (
+            <div className="border-l border-white/10 pl-5">
+              <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-slate-400">
+                <span>Usuário</span>
+                <span className="text-slate-600">·</span>
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+                </span>
+                <span className="normal-case tracking-normal text-slate-300">Sessão ativa</span>
+              </div>
+
+              <div className="mt-1 text-sm font-medium text-white">
+                {sessionDisplayName || sessionEmail}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSignOut}
+                disabled={signingOut}
+                className="mt-1 text-xs text-slate-400 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {signingOut ? "Encerrando..." : "Encerrar sessão"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
